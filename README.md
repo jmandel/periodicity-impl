@@ -23,3 +23,16 @@ This repository tracks work to add support for the Cycle FHIR Implementation Gui
 | `ovumcy` | Web | Implemented in Settings/Data with live shlep QR | Go tests, frontend lint/unit/build, live shlep smoke, browser proof | [docs/screenshots/ovumcy](docs/screenshots/ovumcy/) | [docs/ovumcy-cycle-ig.md](docs/ovumcy-cycle-ig.md) |
 
 See `plan.md` for the implementation workflow.
+
+## Landing page
+
+A React (Vite) landing page in [`site/`](site/) showcases the per-app demo videos and articulates the implementation choices, techniques, and tips, with deep links into this repository and `cycle.fhir.me`. It is built and deployed to GitHub Pages by the [`Deploy site`](.github/workflows/deploy-site.yml) workflow.
+
+```sh
+cd site
+npm install
+npm run dev    # local preview; syncs videos/screenshots from docs/
+npm run build  # production build into site/dist/
+```
+
+The heavy media (videos and screenshots) is synced from `docs/` at build time by `site/scripts/copy-assets.mjs`, so the canonical sources stay under `docs/`.
