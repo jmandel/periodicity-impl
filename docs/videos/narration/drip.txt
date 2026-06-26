@@ -1,0 +1,5 @@
+Drip is a local, single-profile Android app, so the Cycle IG flow lives in Data management, next to the older CSV tools. The implementation deliberately does not turn the feature into another export file. The user reviews a scoped snapshot, including date range and category switches, before anything is encrypted. That same snapshot feeds preview counts, FHIR normalization, compact JWE creation, QR rendering, copy, native share, and Open Viewer.
+
+The mapping is conservative: stored bleeding, flow, basal body temperature, pain and mood selections, cervical observations, fertility signs, and notes become facts when they are actually present. Predictions, sexual activity, and desire are left out of this share.
+
+Create share uploads only ciphertext to the public shlep direct-file host, with a seven-day expiry and a five-open limit. The QR, copy, and share controls all carry the same viewer-prefixed S-H-Link; the key stays in the URL fragment. Stop Sharing uses the manage token to revoke the live QR.

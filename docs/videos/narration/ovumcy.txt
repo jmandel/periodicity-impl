@@ -1,0 +1,5 @@
+Ovumcy is the implementation where a backend is required, because the source cycle data lives behind the web account. The share UI is still user-driven: the account scope, date range, and category toggles are reviewed in the browser, but the server builds the approved Cycle IG snapshot from DailyLog rows, symptoms, settings, and the selected scope.
+
+That backend path is intentionally narrow. It creates one FHIR Bundle, encrypts it, and uploads only compact JWE ciphertext to shlep.exe.xyz. The manage token is kept only in the rendered Stop form, rather than persisted as a reusable account secret. The live card shows the exact snapshot summary that was encrypted, plus the same viewer-prefixed link for QR, copy, share, and Open.
+
+The receiver path stays client-side: cycle.fhir.me fetches ciphertext, keeps the key in the fragment, decrypts locally, and computes the clinician view. Stop sharing posts the manage token and deletes the shlep share; after that, the previous QR returns 404.

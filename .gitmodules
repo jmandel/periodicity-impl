@@ -1,19 +1,19 @@
 [submodule "drip"]
 	path = drip
-	url = https://gitlab.com/bloodyhealth/drip.git
-	branch = main
+	url = https://github.com/jmandel/periodicity-impl.git
+	branch = drip-implemented-work
 [submodule "menstrudel"]
 	path = menstrudel
-	url = https://github.com/J-shw/Menstrudel.git
-	branch = dev
+	url = https://github.com/jmandel/periodicity-impl.git
+	branch = menstrudel-implemented-work
 [submodule "euki"]
 	path = euki
-	url = https://github.com/Euki-Inc/Euki-Android.git
-	branch = main
+	url = https://github.com/jmandel/periodicity-impl.git
+	branch = euki-implemented-work
 [submodule "ovumcy"]
 	path = ovumcy
-	url = https://github.com/ovumcy/ovumcy-web.git
-	branch = main
+	url = https://github.com/jmandel/periodicity-impl.git
+	branch = ovumcy-implemented-work
 [submodule "cycle"]
 	path = cycle
 	url = https://github.com/jmandel/cycle.git

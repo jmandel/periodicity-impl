@@ -1,0 +1,5 @@
+Euki adds Cycle IG sharing inside its cycle settings, which matches the app's privacy model: one local user, no account selector, and a review step before a live link is minted. The share screen makes the scope explicit with date inputs and category checkboxes for bleeding, flow, products, clots, emotions, body symptoms, and notes.
+
+The implementation reads ordinary Euki calendar items, including the deterministic sample data used for verification, and builds one immutable Cycle IG snapshot. Preview counts come from that snapshot, not from a separate report path. Sexual activity, contraception, tests, appointments, derived cycle summaries, and predictions are intentionally omitted because those fields are outside the approved share scope.
+
+When the user creates the share, Euki encrypts locally, uploads compact ciphertext to shlep.exe.xyz, and renders a QR for the same cycle.fhir.me viewer link used by copy, native share, and Open Viewer. The viewer decrypts in the browser. Stop sharing revokes the shlep object so the previous QR no longer resolves.

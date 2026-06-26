@@ -1,0 +1,5 @@
+Menstrudel puts the implementation in Data Management as a Cycle FHIR share panel. The flow starts with the local profile scope, a date range, and independent toggles for the core bleeding facts, flow categories, symptoms, and the app's menstrual pain level enum. Identity is intentionally not included; the local profile is enough for the app but not enough to emit a Patient resource.
+
+The preview is the contract. It is built from the same in-memory snapshot that later becomes the FHIR collection Bundle, so counts, omissions, and the encrypted payload cannot drift. Menstrudel maps logged bleeding days, explicit non-bleeding days, flow, symptom rows, and app-native pain levels. Predictions, period summaries, contraception, sexual activity, sanitary product details, and missing days are left out.
+
+Create live QR encrypts the Bundle locally and sends only compact JWE ciphertext to shlep, with a seven-day expiry and five-open limit. The copy, share, and open buttons reuse the exact viewer-prefixed link, and Stop deletes the live share.
