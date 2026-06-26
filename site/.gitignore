@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# Media is synced from /docs at build time; do not commit copies.
+public/videos/
+public/screenshots/
