@@ -1,0 +1,34 @@
+title: Menstrudel | Private & Offline Period Tracker
+description: "A free, open-source period tracker app that puts your privacy first. No ads, no sign-ups, and no cloud, completely offline."
+url: "https://menstrudel.app"
+image: /assets/images/og-preview.png
+logo: /assets/images/favicon.png
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap 
+  - jekyll-webp
+
+twitter:
+  card: summary_large_image
+social:
+  name: Menstrudel
+  links:
+    - https://github.com/J-shw/Menstrudel
+  
+author:
+  name: Josh Whitticase
+
+defaults:
+  -
+    scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: "post"
+      schema: "schema-article.html"
+
+webp:
+  enabled: true
+  quality: 75
+  img_dir: ["/assets/images", "/assets/images/blog"]
+  nested: true
