@@ -97,10 +97,10 @@ function Technique() {
         <h2>What every implementation does</h2>
       </div>
       <p className="section-sub">
-        Each app implements the same SMART Link pipeline. The mental model is an envelope: the app
-        seals the cycle data so only the recipient can open it, uploads just the sealed envelope to a
-        host, and shares a link. The key that opens the envelope rides in the link&apos;s fragment, so
-        it never reaches the host, and the clinician viewer does the decryption in the browser.
+        Each app implements the same SMART Link pipeline. The app encrypts the cycle data on the
+        device, uploads only the ciphertext to a host, and shares a link. The decryption key stays in
+        the link&apos;s fragment, so the host never receives it, and the clinician viewer fetches the
+        ciphertext and decrypts it in the browser.
       </p>
       <ol className="pipeline">
         {PIPELINE.map((step, i) => (
@@ -131,11 +131,11 @@ function Choices() {
         <h2>Shared implementation choices</h2>
       </div>
       <p className="section-sub">
-        A few decisions recurred across every app and kept each one a focused, reviewable change. The
-        mental model behind them: the share is a list of facts the user actually recorded — a logged
-        day becomes a fact, an untouched day stays silent, and nothing is ever inferred. The IG layers
-        those facts, with the core menstrual-bleeding yes/no underneath and richer detail like flow,
-        temperature, and symptoms on top.
+        A few choices recur across every app, and each one keeps the change small and easy to review.
+        They follow the data model in the IG: the share is a list of facts the user actually recorded.
+        A logged day becomes a fact, an untouched day stays silent, and nothing is inferred. The IG
+        organizes those facts in layers, with the core menstrual-bleeding yes/no underneath and richer
+        detail like flow, temperature, and symptoms on top.
       </p>
       <div className="choice-grid">
         {CHOICES.map((c) => (
