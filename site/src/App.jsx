@@ -114,11 +114,13 @@ function Technique() {
         ))}
       </ol>
       <p className="technique-foot">
-        The receiver path always lands in{' '}
+        These apps default the receiver to{' '}
         <a href={CYCLE_VIEWER_URL} target="_blank" rel="noreferrer">
           cycle.fhir.me/view
         </a>
-        , which decrypts locally before rendering the clinical review.
+        , but the viewer prefix is optional — an app can point it anywhere or omit it, and receivers can
+        always open the SMART Link in their preferred viewer, which decrypts locally before rendering the
+        clinical review.
       </p>
     </section>
   );

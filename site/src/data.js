@@ -35,7 +35,7 @@ export const ORIENTATION = [
   {
     heading: 'The viewer (where a link opens)',
     body:
-      'When someone opens a shared SMART Link, it lands in the clinician viewer at cycle.fhir.me/view. The viewer fetches the ciphertext and decrypts it locally in the browser to render a clinical review of the shared cycle data.',
+      'These apps default to the clinician viewer at cycle.fhir.me/view, but that viewer prefix is optional — a SMART Link can carry any prefix the app chooses or none at all, and a receiver can always open it in their preferred viewer. However it opens, the viewer fetches the ciphertext and decrypts it locally in the browser to render a clinical review of the shared cycle data.',
     link: { label: 'Open cycle.fhir.me/view', href: CYCLE_VIEWER_URL },
   },
   {
@@ -76,7 +76,7 @@ export const PIPELINE = [
   {
     title: 'Viewer decrypts in the browser',
     body:
-      'A clinician opens the link in cycle.fhir.me/view, which fetches the ciphertext and decrypts locally to render the clinical review.',
+      'A clinician opens the link — by default in cycle.fhir.me/view, or any viewer they prefer — which fetches the ciphertext and decrypts locally to render the clinical review. The viewer prefix is just a convenience the app can set or omit.',
   },
   {
     title: 'Stop means stop',

@@ -99,6 +99,7 @@ main,
 .nav a {
   color: var(--muted);
   text-decoration: none;
+  white-space: nowrap;
   transition: color 0.15s ease;
 }
 
@@ -542,6 +543,23 @@ main > section {
 
 /* Responsive */
 @media (max-width: 820px) {
+  .site-header {
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+  .brand {
+    flex-shrink: 0;
+  }
+  .nav {
+    gap: 16px;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
   .app-card {
     grid-template-columns: 1fr;
   }
