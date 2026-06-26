@@ -1,6 +1,6 @@
 # Video reel handoff prompt
 
-You are working in a repo where SHLink-based Cycle IG sharing has already been implemented across several apps. Your job is to produce a narrated video reel that demonstrates the implementation end to end. Do not make a screenshot sequence. Record real app/browser videos, embed those clips in a consistent slide-like presentation shell, synthesize or reuse narration audio, and verify that the final videos show the complete flow.
+You are working in a repo where SHLink-based SMART Link sharing has already been implemented across several apps. Your job is to produce a narrated video reel that demonstrates the feature end to end. Do not make a screenshot sequence. Record real app/browser videos, embed those clips in a consistent slide-like presentation shell, synthesize or reuse narration audio, and verify that the final videos show the complete flow.
 
 ## Goal
 
@@ -8,11 +8,11 @@ Create per-app videos and one combined reel that show, for each implemented app:
 
 1. App launch or entry into the relevant area.
 2. Native sample-data tour: start from sample data already loaded for demo purposes, then show how the data looks in the app's normal native UI, not just in the export/share panel.
-3. SHLink share setup: scope controls, preview/counts/omissions, and live QR/link creation.
+3. SMART Link share setup: scope controls, preview/counts/omissions, and live QR/link creation.
 4. Doctor/clinician viewer: open the exact live SHLink in desktop Chromium between creation and disable, click through to the decrypted viewer if needed, and show the rendered clinical review.
 5. Disable/revoke: return to the app and stop sharing, proving the old QR/link is no longer live or that the UI reports the share as stopped.
 
-The output should be polished enough to hand to a reviewer who wants evidence that the implementation is live, integrated into the real app, and using a live SHLink backend/viewer path.
+The output should be polished enough to hand to a reviewer who wants evidence that the SMART Link feature is live, integrated into the real app, and using a live SHLink backend/viewer path.
 
 ## Required outputs
 
@@ -22,8 +22,8 @@ Use this structure unless the repo already has a better local convention:
 - `docs/videos/audio/<app>.mp3`: synthesized narration audio for each app.
 - `docs/videos/_work/raw/*.mp4`: raw Android screenrecord, Playwright, or browser clips.
 - `docs/videos/_work/*.mjs`: recording/rendering scripts used to reproduce the reel.
-- `docs/videos/per-app/<app>-cycle-ig-flow.mp4`: narrated per-app videos.
-- `docs/videos/final/cycle-ig-implementation-reel.mp4`: combined reel.
+- `docs/videos/per-app/<app>-smart-link-flow.mp4`: narrated per-app videos.
+- `docs/videos/final/smart-link-implementation-reel.mp4`: combined reel.
 - `docs/videos/video-index.md`: generated index with durations and key timestamps.
 - `video-reel-prompt.md`: this handoff prompt, updated if the process changes.
 
@@ -32,7 +32,7 @@ Use this structure unless the repo already has a better local convention:
 - The final videos must contain real videos, not still screenshots animated as slides.
 - The native app tour must show preloaded sample data in normal app views before the SHLink workflow. Examples: calendar, chart, cycle summary, tracking/log views, symptom/history views, or the app's equivalent native visualizations.
 - Do not spend the tour showing the act of loading sample data unless it is unavoidable. Preload sample data before recording, then begin the tour with the app in a populated state.
-- The share workflow must show the implemented app UI, not a standalone FHIR export divorced from the SHLink QR.
+- The share workflow must show the implemented app UI, not a standalone FHIR export divorced from the SMART Link QR.
 - The Chromium viewer segment is required for every app. Record desktop Chromium after enabling and before disabling the share.
 - The viewer segment must reach the decrypted clinical/doctor view, not stop at a generic "open link" page. If the viewer has an "Open link" button, click it.
 - The QR must be fully visible when shown. If a raw clip partially cuts it off, re-record or use a segment-specific crop/positioning fix that keeps the whole QR visible.
@@ -137,6 +137,8 @@ If using the existing Mistral TTS pattern, synthesize MP3 with:
 - voice: the repo's existing neutral/Paul voice ID if present;
 - response format: `mp3`.
 
+If `MISTRAL_API_KEY` is unavailable, use a temporary local virtualenv with `edge-tts` rather than committing a new dependency. The June 26, 2026 SMART Link reel used `en-US-BrianNeural` at `--rate=-2%` and wrote directly to `docs/videos/audio/<app>.mp3`.
+
 Store both the text and MP3 in `docs/videos/narration/` and `docs/videos/audio/`. Measure audio duration with `ffprobe`; do not guess.
 
 ## Rendering the reel
@@ -146,7 +148,7 @@ Render a consistent 1920x1080 presentation shell with live clips embedded inside
 - app name and platform;
 - segment label;
 - short bullets explaining the moment;
-- a small consistent `viewer#shlink:/... -> local decrypt` style callout;
+- a small consistent `SMART Link -> local decrypt` style callout;
 - a progress/accent system that is readable but not visually dominant.
 
 Use real clips as inputs. Speed-adjust clips only enough to align with narration timing. Do not turn screenshots into fake videos. If a segment needs a final state to remain visible, add a cloned tail hold with `tpad` or equivalent.
@@ -170,8 +172,8 @@ Before reporting completion, verify the rendered outputs, not just the raw clips
 Use `ffprobe` to check duration and audio:
 
 ```sh
-ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 docs/videos/final/cycle-ig-implementation-reel.mp4
-ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,channels,sample_rate -of csv=p=0 docs/videos/per-app/<app>-cycle-ig-flow.mp4
+ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 docs/videos/final/smart-link-implementation-reel.mp4
+ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,channels,sample_rate -of csv=p=0 docs/videos/per-app/<app>-smart-link-flow.mp4
 ```
 
 Extract final-render frames or contact sheets for each app:

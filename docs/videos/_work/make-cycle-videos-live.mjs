@@ -49,7 +49,7 @@ const apps = [
       },
       {
         clip: 'drip-02-scope-preview.mp4',
-        label: 'Review one SMART Link snapshot',
+        label: 'Review the SMART Link share',
         notes: ['Date range plus category switches', 'Preview and QR use the same snapshot', 'Unsupported fields stay out'],
       },
       {
@@ -61,13 +61,13 @@ const apps = [
       {
         clip: 'drip-viewer-chromium.mp4',
         label: 'Open the doctor viewer',
-        notes: ['Desktop Chromium opens the same QR SHLink', 'The viewer fetches ciphertext from shlep', 'Clinical review renders after local decrypt'],
+        notes: ['Desktop Chromium opens the same SMART Link', 'The viewer fetches ciphertext from shlep', 'Clinical review renders after local decrypt'],
       },
       {
         clip: 'drip-04-disable.mp4',
-        label: 'Disable the QR',
+        label: 'Disable the SMART Link',
         cropBottom: 380,
-        notes: ['Stop Sharing revokes the shlep share', 'The old QR/link no longer resolves', 'Expiry and max opens remain safeguards'],
+        notes: ['Stop Sharing revokes the shlep share', 'The old SMART Link no longer resolves', 'Expiry and max opens remain safeguards'],
       },
     ],
   },
@@ -91,12 +91,12 @@ const apps = [
       {
         clip: 'euki-viewer-chromium.mp4',
         label: 'Open the doctor viewer',
-        notes: ['Desktop Chromium opens the QR SHLink', 'cycle.fhir.me decrypts locally', 'The host never receives the key'],
+        notes: ['Desktop Chromium opens the SMART Link', 'cycle.fhir.me decrypts locally', 'The host never receives the key'],
       },
       {
         clip: 'euki-03-disable.mp4',
         label: 'Stop sharing',
-        notes: ['Stop Sharing calls the shlep manage endpoint', 'The previous QR/link no longer resolves', 'The app returns to share-ready state'],
+        notes: ['Stop Sharing calls the shlep manage endpoint', 'The previous SMART Link no longer resolves', 'The app returns to share-ready state'],
       },
     ],
   },
@@ -114,18 +114,18 @@ const apps = [
       },
       {
         clip: 'menstrudel-02-share-create.mp4',
-        label: 'Review and create QR',
+        label: 'Review and create SMART Link',
         notes: ['Data Management contains the SMART Link panel', 'Local profile scope; identity not included', 'Preview is built from the same snapshot'],
       },
       {
         clip: 'menstrudel-viewer-chromium.mp4',
         label: 'Open the doctor viewer',
-        notes: ['Desktop Chromium opens the QR SHLink', 'The viewer derives the clinical summary', 'Decryption happens client-side'],
+        notes: ['Desktop Chromium opens the SMART Link', 'The viewer derives the clinical summary', 'Decryption happens client-side'],
       },
       {
         clip: 'menstrudel-03-disable.mp4',
         label: 'Stop sharing',
-        notes: ['Stop calls the shlep control plane', 'The previous QR/link returns 404', 'Expiry and max-use still apply'],
+        notes: ['Stop calls the shlep control plane', 'The previous SMART Link returns 404', 'Expiry and max-use still apply'],
       },
     ],
   },
@@ -143,7 +143,7 @@ const apps = [
       },
       {
         clip: 'ovumcy-02-share-create.mp4',
-        label: 'Backend creates the live QR',
+        label: 'Backend creates the live SMART Link',
         notes: ['The web account supplies the source data', 'Server builds the approved snapshot', 'Only compact ciphertext is uploaded to shlep'],
       },
       {
@@ -153,8 +153,8 @@ const apps = [
       },
       {
         clip: 'ovumcy-04-stop.mp4',
-        label: 'Disable the live share',
-        notes: ['The rendered manage token is posted once', 'shlep revokes the hosted object', 'The old QR/link no longer resolves'],
+        label: 'Disable the SMART Link',
+        notes: ['The rendered manage token is posted once', 'shlep revokes the hosted object', 'The old SMART Link no longer resolves'],
       },
     ],
   },
@@ -293,7 +293,7 @@ function renderShell(app, segment, index) {
   <rect width="1920" height="1080" fill="${theme.paper}"/>
   <line x1="0" y1="82" x2="1920" y2="82" stroke="${theme.line}" stroke-width="2"/>
   <text x="74" y="52" font-size="26" font-weight="700" fill="${theme.ink}">cycle<tspan fill="${theme.coral}">.fhir.me</tspan></text>
-  <text x="304" y="52" font-size="23" fill="${theme.inkMuted}">live implementation flow</text>
+  <text x="304" y="52" font-size="23" fill="${theme.inkMuted}">SMART Link implementation flow</text>
   <rect x="1638" y="22" width="196" height="38" rx="19" fill="${app.accent}" opacity="0.14"/>
   <text x="1660" y="49" font-size="22" font-weight="700" fill="${app.accent}">${escapeXml(app.id)}</text>
   <rect x="${box.x - 14}" y="${box.y - 14}" width="${box.w + 28}" height="${box.h + 28}" rx="8" fill="${theme.paperSunken}" stroke="${theme.line}" stroke-width="2"/>
@@ -305,7 +305,7 @@ function renderShell(app, segment, index) {
   <line x1="${box.textX}" y1="388" x2="1815" y2="388" stroke="${theme.line}" stroke-width="3"/>
   ${bulletList(segment.notes, box.textX, 456, box.textChars)}
   <rect x="${box.textX}" y="902" width="630" height="70" rx="8" fill="${theme.codeBg}"/>
-  <text x="${box.textX + 28}" y="946" font-size="28" font-family="monospace" fill="#F3E9DB">viewer#shlink:/... -> local decrypt</text>
+  <text x="${box.textX + 28}" y="946" font-size="28" font-family="monospace" fill="#F3E9DB">SMART Link -> local decrypt</text>
   <rect x="74" y="1031" width="442" height="12" rx="6" fill="${theme.coral}"/>
   <rect x="536" y="1031" width="442" height="12" rx="6" fill="${theme.amber}"/>
   <rect x="998" y="1031" width="442" height="12" rx="6" fill="${theme.teal}"/>
@@ -443,7 +443,7 @@ function renderAppVideo(app) {
   ));
   const silent = path.join(silentDir, `${app.id}-live-silent.mp4`);
   concatVideos(rendered.map((segment) => segment.out), silent);
-  const out = path.join(appVideoDir, `${app.id}-cycle-ig-flow.mp4`);
+  const out = path.join(appVideoDir, `${app.id}-smart-link-flow.mp4`);
   muxAudio(silent, audio, out);
 
   const starts = [];
@@ -505,7 +505,7 @@ function renderStillVideo(image, duration, out) {
 }
 
 function renderOpeningTitle() {
-  const screenshot = path.join(workDir, 'cycle-ig-home.png');
+  const screenshot = path.join(workDir, 'smart-link-home.png');
   const image = existsSync(screenshot)
     ? `<image href="${imageDataUri(screenshot)}" x="96" y="190" width="1110" height="694" preserveAspectRatio="xMidYMid slice" opacity="0.95"/>
   <rect x="96" y="190" width="1110" height="694" rx="8" fill="none" stroke="${theme.line}" stroke-width="2"/>`
@@ -518,12 +518,12 @@ function renderOpeningTitle() {
   ${image}
   <rect x="1248" y="190" width="560" height="694" rx="8" fill="${theme.paperSunken}" stroke="${theme.line}" stroke-width="2"/>
   <text x="1290" y="310" font-size="48" font-weight="800" fill="${theme.ink}">Period Tracking</text>
-  <text x="1290" y="370" font-size="44" font-weight="800" fill="${theme.ink}">Implementation Guide</text>
+  <text x="1290" y="370" font-size="44" font-weight="800" fill="${theme.ink}">SMART Link Demo</text>
   <text x="1290" y="482" font-size="76" font-weight="900" fill="${theme.coral}">cycle.fhir.me</text>
   <text x="1290" y="592" font-size="32" fill="${theme.inkMuted}">Live app recordings embedded</text>
-  <text x="1290" y="638" font-size="32" fill="${theme.inkMuted}">in the implementation flow.</text>
-  <text x="1290" y="710" font-size="32" fill="${theme.inkMuted}">Each demo shows launch, share</text>
-  <text x="1290" y="756" font-size="32" fill="${theme.inkMuted}">review, QR handoff, viewer path,</text>
+  <text x="1290" y="638" font-size="32" fill="${theme.inkMuted}">in a SMART Link walkthrough.</text>
+  <text x="1290" y="710" font-size="32" fill="${theme.inkMuted}">Each demo shows native data,</text>
+  <text x="1290" y="756" font-size="32" fill="${theme.inkMuted}">share review, QR handoff, viewer,</text>
   <text x="1290" y="802" font-size="32" fill="${theme.inkMuted}">and disable/revoke.</text>
   <rect x="1290" y="842" width="354" height="70" rx="8" fill="${theme.codeBg}"/>
   <text x="1320" y="888" font-size="30" font-family="monospace" fill="#F3E9DB">#shlink:/...</text>
@@ -546,7 +546,7 @@ function renderAppTitle(app) {
   <circle cx="556" cy="248" r="42" fill="${theme.plum}"/>
   <text x="226" y="420" font-size="150" font-weight="800" fill="${theme.ink}">${escapeXml(app.title)}</text>
   <text x="236" y="502" font-size="46" font-weight="700" fill="${app.accent}">${escapeXml(app.platform)}</text>
-  <text x="238" y="652" font-size="40" fill="${theme.inkMuted}">Launch -> scope -> preview -> live QR -> viewer -> stop sharing</text>
+  <text x="238" y="652" font-size="40" fill="${theme.inkMuted}">Native data -> SMART Link -> viewer -> stop sharing</text>
   <text x="238" y="742" font-size="34" fill="${theme.inkMuted}">The following slides embed live screen recordings, not screenshot sequences.</text>
   <text x="236" y="874" font-size="42" font-weight="800" fill="${theme.ink}">cycle<tspan fill="${theme.coral}">.fhir.me</tspan></text>
 </svg>`;
@@ -566,7 +566,7 @@ function buildCombined(appResults) {
     parts.push(titleVideo, appResults.get(app.id).out);
   }
 
-  const out = path.join(finalDir, 'cycle-ig-implementation-reel.mp4');
+  const out = path.join(finalDir, 'smart-link-implementation-reel.mp4');
   const list = path.join(liveDir, 'combined-list.txt');
   writeFileSync(list, parts.map((file) => `file '${escapeConcatPath(file)}'`).join('\n') + '\n');
   rmSync(out, { force: true });
@@ -601,7 +601,7 @@ function buildCombined(appResults) {
 
   const starts = [];
   let cursor = 0;
-  starts.push({ label: 'IG opening: cycle.fhir.me', time: cursor });
+  starts.push({ label: 'SMART Link opening: cycle.fhir.me', time: cursor });
   cursor += 4;
   for (const app of apps) {
     starts.push({ label: `${app.title} title`, time: cursor });
@@ -621,9 +621,9 @@ function formatTime(seconds) {
 
 function writeIndex(appResults, combined) {
   const lines = [
-    '# Cycle IG implementation videos',
+    '# SMART Link implementation videos',
     '',
-    'Generated 2026-06-26 from live Android `screenrecord` captures, Playwright browser video capture for Ovumcy, and the existing narrated audio tracks.',
+    'Generated 2026-06-26 from live Android `screenrecord` captures, Playwright browser video capture for Ovumcy, and the narrated SMART Link audio tracks.',
     '',
     'Each per-app video embeds real app video inside the slide-style presentation frame. The live clips are speed-adjusted only enough to align with the measured narration audio; they are not screenshot sequences.',
     '',

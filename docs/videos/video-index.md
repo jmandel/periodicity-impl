@@ -1,6 +1,6 @@
-# Cycle IG implementation videos
+# SMART Link implementation videos
 
-Generated 2026-06-26 from live Android `screenrecord` captures, Playwright browser video capture for Ovumcy, and the existing narrated audio tracks.
+Generated 2026-06-26 from live Android `screenrecord` captures, Playwright browser video capture for Ovumcy, and the narrated SMART Link audio tracks.
 
 Each per-app video embeds real app video inside the slide-style presentation frame. The live clips are speed-adjusted only enough to align with the measured narration audio; they are not screenshot sequences.
 
@@ -8,47 +8,47 @@ Each per-app video embeds real app video inside the slide-style presentation fra
 
 | App | Video | Duration | Raw live input | Audio | Narration |
 |---|---:|---:|---:|---:|---:|
-| drip | [drip-cycle-ig-flow.mp4](per-app/drip-cycle-ig-flow.mp4) | 1:00 | 1:55 at 1.98x | [drip.mp3](audio/drip.mp3) | [drip.txt](narration/drip.txt) |
-| Euki | [euki-cycle-ig-flow.mp4](per-app/euki-cycle-ig-flow.mp4) | 1:02 | 1:08 at 1.14x | [euki.mp3](audio/euki.mp3) | [euki.txt](narration/euki.txt) |
-| Menstrudel | [menstrudel-cycle-ig-flow.mp4](per-app/menstrudel-cycle-ig-flow.mp4) | 0:50 | 1:10 at 1.45x | [menstrudel.mp3](audio/menstrudel.mp3) | [menstrudel.txt](narration/menstrudel.txt) |
-| Ovumcy | [ovumcy-cycle-ig-flow.mp4](per-app/ovumcy-cycle-ig-flow.mp4) | 0:57 | 0:28 at 0.52x | [ovumcy.mp3](audio/ovumcy.mp3) | [ovumcy.txt](narration/ovumcy.txt) |
-| Combined reel | [cycle-ig-implementation-reel.mp4](final/cycle-ig-implementation-reel.mp4) | 4:04 | all raw live clips | mixed | title slides plus all app audio |
+| drip | [drip-smart-link-flow.mp4](per-app/drip-smart-link-flow.mp4) | 1:09 | 1:55 at 1.71x | [drip.mp3](audio/drip.mp3) | [drip.txt](narration/drip.txt) |
+| Euki | [euki-smart-link-flow.mp4](per-app/euki-smart-link-flow.mp4) | 1:16 | 1:08 at 0.92x | [euki.mp3](audio/euki.mp3) | [euki.txt](narration/euki.txt) |
+| Menstrudel | [menstrudel-smart-link-flow.mp4](per-app/menstrudel-smart-link-flow.mp4) | 1:13 | 1:10 at 0.99x | [menstrudel.mp3](audio/menstrudel.mp3) | [menstrudel.txt](narration/menstrudel.txt) |
+| Ovumcy | [ovumcy-smart-link-flow.mp4](per-app/ovumcy-smart-link-flow.mp4) | 1:05 | 0:28 at 0.45x | [ovumcy.mp3](audio/ovumcy.mp3) | [ovumcy.txt](narration/ovumcy.txt) |
+| Combined reel | [smart-link-implementation-reel.mp4](final/smart-link-implementation-reel.mp4) | 4:58 | all raw live clips | mixed | title slides plus all app audio |
 
 ## Per-app key moments
 
-### drip (1:00)
+### drip (1:09)
 - 0:00 - Native sample data tour
-- 0:11 - Review one SMART Link snapshot
-- 0:28 - Create the live SMART Link QR
-- 0:43 - Open the doctor viewer
-- 0:48 - Disable the QR
+- 0:13 - Review the SMART Link share
+- 0:32 - Create the live SMART Link QR
+- 0:50 - Open the doctor viewer
+- 0:56 - Disable the SMART Link
 
-### Euki (1:02)
+### Euki (1:16)
 - 0:00 - Native sample data tour
-- 0:08 - Review and create SMART Link
-- 0:43 - Open the doctor viewer
-- 0:52 - Stop sharing
+- 0:10 - Review and create SMART Link
+- 0:54 - Open the doctor viewer
+- 1:04 - Stop sharing
 
-### Menstrudel (0:50)
+### Menstrudel (1:13)
 - 0:00 - Native sample data tour
-- 0:05 - Review and create QR
-- 0:33 - Open the doctor viewer
-- 0:43 - Stop sharing
+- 0:07 - Review and create SMART Link
+- 0:48 - Open the doctor viewer
+- 1:03 - Stop sharing
 
-### Ovumcy (0:57)
+### Ovumcy (1:05)
 - 0:00 - Native web sample data tour
-- 0:14 - Backend creates the live QR
-- 0:27 - Open the clinician viewer
-- 0:46 - Disable the live share
+- 0:16 - Backend creates the live SMART Link
+- 0:31 - Open the clinician viewer
+- 0:52 - Disable the SMART Link
 
 ## Combined reel sequence
 
-- 0:00 - IG opening: cycle.fhir.me
+- 0:00 - SMART Link opening: cycle.fhir.me
 - 0:04 - drip title
 - 0:07 - drip live flow
-- 1:07 - Euki title
-- 1:10 - Euki live flow
-- 2:11 - Menstrudel title
-- 2:14 - Menstrudel live flow
-- 3:05 - Ovumcy title
-- 3:07 - Ovumcy live flow
+- 1:16 - Euki title
+- 1:19 - Euki live flow
+- 2:35 - Menstrudel title
+- 2:37 - Menstrudel live flow
+- 3:50 - Ovumcy title
+- 3:53 - Ovumcy live flow
