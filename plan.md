@@ -11,14 +11,15 @@ Work through each open source menstrual tracking app one by one and implement su
 1. Study the Cycle IG materials in `cycle`, including the AI skill, documentation, examples, related specs, and linked repositories. Review `shlep` and the live `https://shlep.exe.xyz/llms.txt` endpoint when integration support would help.
 2. Pick one app from the status table in `README.md`.
 3. Inspect the app's existing data model, import/export flows, sharing flows, and test setup.
-4. Implement Cycle IG support using the smallest changes that fit the app's architecture.
-5. Test the implementation until it works:
+4. Create or enable a rich synthetic sample dataset inside the app using app-native storage, fixtures, seeds, demo accounts, or import paths as appropriate. The sample data should be non-real, reproducible, and broad enough to exercise the Cycle IG mapping, testing, and screenshots: multiple cycles, varied bleeding/flow intensities, explicit negatives where the app can represent them, temperatures, symptoms, notes, and edge cases relevant to that app's model.
+5. Implement Cycle IG support using the smallest changes that fit the app's architecture.
+6. Test the implementation with the synthetic sample data until it works:
    - Android apps: use the Android emulator and the app's existing automated test tooling where available.
    - Web apps: use headless Chromium and the app's existing automated test tooling where available.
-6. Capture screenshots showing the implemented functionality in the running app.
-7. Add a thorough implementation writeup for the app in this repo.
-8. Update `README.md` with the app's implementation, testing, screenshots, and writeup status.
-9. Move to the next app only after the current app has working support, evidence, and documentation.
+7. Capture screenshots showing the implemented functionality in the running app with the synthetic sample data loaded.
+8. Add a thorough implementation writeup for the app in this repo.
+9. Update `README.md` with the app's implementation, sample data, testing, screenshots, and writeup status.
+10. Move to the next app only after the current app has working support, sample data, evidence, and documentation.
 
 ## App Order
 
@@ -36,6 +37,7 @@ This order can change if setup or dependency issues make another app a better fi
 For each completed app, add an implementation writeup to this repository that covers:
 
 - Relevant app architecture and data model findings.
+- How the synthetic sample dataset is created, loaded, and scoped so it cannot be confused with real user data.
 - How Cycle IG support was implemented.
 - Any mappings between app-specific period tracking concepts and Cycle IG resources.
 - Test commands, emulator/browser configuration, and results.
