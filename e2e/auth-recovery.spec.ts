@@ -1,0 +1,266 @@
+import fs from 'node:fs/promises';
+import { expect, test } from '@playwright/test';
+import {
+  completeOnboardingIfPresent,
+  continueFromRecoveryCode,
+  createCredentials,
+  enableClipboardRoundTripIfSupported,
+  expectDedicatedRecoveryPage,
+  expectInlineRegisterRecoveryStep,
+  expectNoSensitiveAuthParams,
+  expectValueNotInWebStorage,
+  loginViaUI,
+  logoutViaAPI,
+  openForgotPasswordRecoveryStep,
+  requestSubmitForm,
+  readRecoveryCode,
+  registerOwnerViaUI,
+} from './support/auth-helpers';
+
+test.describe('Auth: recovery and reset password', () => {
+  test('post-registration recovery step supports copy/download and blocks continue until confirmation', async ({
+    page,
+    context,
+  }) => {
+    const creds = createCredentials('auth-recovery-tools');
+
+    await registerOwnerViaUI(page, creds);
+    await expectInlineRegisterRecoveryStep(page);
+
+    const recoveryCode = await readRecoveryCode(page);
+
+    const form = page.locator('form[data-recovery-code-confirm]');
+    const continueButton = page.locator('[data-recovery-code-submit]');
+    const checkbox = page.locator('#recovery-code-saved');
+    const status = page.locator('[data-recovery-code-status]');
+    await expect(continueButton).toHaveAttribute('aria-disabled', 'true');
+    await expectInlineRegisterRecoveryStep(page);
+    await expect(checkbox).not.toBeChecked();
+
+    await requestSubmitForm(form);
+    await expect(page).toHaveURL(/\/register(?:\?.*)?$/);
+    expectNoSensitiveAuthParams(page.url());
+    await expect(checkbox).toHaveAttribute('aria-invalid', 'true');
+    await expect(status).toContainText('Check this box to continue.');
+
+    const canAssertClipboardRoundTrip = await enableClipboardRoundTripIfSupported(page, context);
+
+    const toolButtons = page.locator('div.mt-4.flex.flex-wrap.gap-2 button.btn-secondary');
+    if (canAssertClipboardRoundTrip) {
+      await toolButtons.nth(0).click();
+      await expect
+        .poll(async () => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe(recoveryCode);
+    }
+
+    const downloadPromise = page.waitForEvent('download');
+    await toolButtons.nth(1).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('ovumcy-recovery-code.txt');
+    const downloadPath = await download.path();
+    expect(downloadPath).toBeTruthy();
+    const downloadedContent = await fs.readFile(downloadPath!, 'utf8');
+    expect(downloadedContent).toContain(recoveryCode);
+
+    await checkbox.check();
+    await expect(continueButton).toHaveAttribute('aria-disabled', 'false');
+    const continueButtonBox = await continueButton.boundingBox();
+    expect(continueButtonBox).toBeTruthy();
+    await page.mouse.click(
+      continueButtonBox!.x + continueButtonBox!.width / 2,
+      continueButtonBox!.y + continueButtonBox!.height / 2
+    );
+    await expect(page).toHaveURL(/\/onboarding(?:\?.*)?$/);
+  });
+
+  test('recovery confirmation ignores hostile form actions and follows trusted continue targets', async ({
+    page,
+  }) => {
+    const creds = createCredentials('auth-recovery-redirect-sanitize');
+
+    await registerOwnerViaUI(page, creds);
+    await expectInlineRegisterRecoveryStep(page);
+
+    const form = page.locator('form[data-recovery-code-confirm]');
+    const continueButton = page.locator('[data-recovery-code-submit]');
+    const checkbox = page.locator('#recovery-code-saved');
+
+    await checkbox.check();
+    await form.evaluate((element) => {
+      element.setAttribute('action', 'https://evil.example/phish');
+    });
+
+    const continueButtonBox = await continueButton.boundingBox();
+    expect(continueButtonBox).toBeTruthy();
+    await page.mouse.click(
+      continueButtonBox!.x + continueButtonBox!.width / 2,
+      continueButtonBox!.y + continueButtonBox!.height / 2
+    );
+
+    await expect(page).toHaveURL(/\/onboarding(?:\?.*)?$/);
+    await expect(page).not.toHaveURL(/evil\.example/);
+  });
+
+  test('forgot-password flow keeps PII out of URL and validates recovery code format', async ({
+    page,
+  }) => {
+    const creds = createCredentials('auth-forgot-validation');
+
+    await registerOwnerViaUI(page, creds);
+    const recoveryCode = await readRecoveryCode(page);
+    await logoutViaAPI(page);
+
+    await openForgotPasswordRecoveryStep(page, creds.email);
+    expectNoSensitiveAuthParams(page.url());
+
+    await page.locator('#recovery-code').fill('invalid-code-format');
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/\/forgot-password$/);
+    expectNoSensitiveAuthParams(page.url());
+    await expect(page.locator('.status-error')).toBeVisible();
+
+    await page.locator('#recovery-code').fill('OVUM-0000-0000-0000');
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/\/forgot-password$/);
+    expectNoSensitiveAuthParams(page.url());
+    await expect(page.locator('.status-error')).toBeVisible();
+
+    await page.locator('#recovery-code').fill(recoveryCode);
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/\/reset-password$/);
+    expectNoSensitiveAuthParams(page.url());
+  });
+
+  test('reset password via recovery code rotates credentials and old password stops working', async ({
+    page,
+  }) => {
+    const creds = createCredentials('auth-reset-flow');
+    const newPassword = 'EvenStronger2';
+
+    await registerOwnerViaUI(page, creds);
+    const oldRecoveryCode = await readRecoveryCode(page);
+    await continueFromRecoveryCode(page);
+    await completeOnboardingIfPresent(page);
+    await logoutViaAPI(page);
+
+    await openForgotPasswordRecoveryStep(page, creds.email);
+    await page.locator('#recovery-code').fill(oldRecoveryCode);
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/\/reset-password$/);
+
+    await page.locator('#reset-password').fill(newPassword);
+    await page.locator('#reset-password-confirm').fill(newPassword);
+    await page.locator('form[action="/api/v1/password-resets/redeem"] button[type="submit"]').click();
+
+    await expectDedicatedRecoveryPage(page);
+    expectNoSensitiveAuthParams(page.url());
+
+    const newRecoveryCode = await readRecoveryCode(page);
+    expect(newRecoveryCode).not.toBe(oldRecoveryCode);
+    await expectValueNotInWebStorage(page, newRecoveryCode);
+
+    await continueFromRecoveryCode(page);
+    await expect(page).toHaveURL(/\/dashboard(?:\?.*)?$/);
+
+    await logoutViaAPI(page);
+
+    await page.goto('/login');
+    await page.locator('#login-email').fill(creds.email);
+    await page.locator('#login-password').fill(creds.password);
+    await page.locator('form[action="/api/v1/sessions"] button[type="submit"]').click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.locator('.status-error')).toBeVisible();
+
+    await loginViaUI(page, { email: creds.email, password: newPassword });
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
+  test('reset-password server error clears as soon as the user edits the password fields', async ({
+    page,
+  }) => {
+    const creds = createCredentials('auth-reset-error-clear');
+
+    await registerOwnerViaUI(page, creds);
+    const recoveryCode = await readRecoveryCode(page);
+    await logoutViaAPI(page);
+
+    await openForgotPasswordRecoveryStep(page, creds.email);
+    await page.locator('#recovery-code').fill(recoveryCode);
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+
+    await expect(page).toHaveURL(/\/reset-password$/);
+
+    await page.locator('#reset-password').fill('weak');
+    await page.locator('#reset-password-confirm').fill('weak');
+    await page.locator('form[action="/api/v1/password-resets/redeem"] button[type="submit"]').click();
+
+    const serverError = page.locator('[data-auth-server-error]');
+    await expect(serverError).toBeVisible();
+
+    await page.locator('#reset-password').fill('ValidStrong2');
+    await expect(serverError).toHaveCount(0);
+
+    await page.locator('#reset-password-confirm').fill('ValidStrong2');
+    await expect(page.locator('[data-auth-server-error]')).toHaveCount(0);
+  });
+
+  test('recovery code page is no longer available after re-login', async ({ page }) => {
+    const creds = createCredentials('auth-recovery-once');
+
+    await registerOwnerViaUI(page, creds);
+    await readRecoveryCode(page);
+    await continueFromRecoveryCode(page);
+    await completeOnboardingIfPresent(page);
+    await logoutViaAPI(page);
+
+    await loginViaUI(page, creds);
+    await expect(page).toHaveURL(/\/dashboard$/);
+
+    await page.goto('/recovery-code');
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(page.locator('#recovery-code')).toHaveCount(0);
+  });
+
+  test('recovery code page is consumed after the first successful view', async ({ page }) => {
+    const creds = createCredentials('auth-recovery-consumed');
+
+    await registerOwnerViaUI(page, creds);
+    await expectInlineRegisterRecoveryStep(page);
+    await readRecoveryCode(page);
+
+    await page.goto('/recovery-code');
+    await expect(page).toHaveURL(/\/onboarding(?:\?.*)?$/);
+    await expect(page.locator('#recovery-code')).toHaveCount(0);
+  });
+
+  test('basic security: csrf enforcement and reset flow keep secrets out of the browser surface', async ({
+    page,
+  }) => {
+    const creds = createCredentials('auth-security-basic');
+
+    await registerOwnerViaUI(page, creds);
+    const recoveryCode = await readRecoveryCode(page);
+
+    const csrfFailure = await page.request.delete('/api/v1/sessions/current', {
+      form: {},
+      maxRedirects: 0,
+    });
+    expect(csrfFailure.status()).toBe(403);
+
+    await page.goto('/dashboard');
+    await expect(page).toHaveURL(/\/onboarding(?:\?.*)?$/);
+
+    await logoutViaAPI(page);
+
+    await openForgotPasswordRecoveryStep(page, creds.email);
+    await page.locator('#recovery-code').fill(recoveryCode);
+    await page.locator('form[action="/api/v1/password-resets"] button[type="submit"]').click();
+    await expect(page).toHaveURL(/\/reset-password$/);
+    expectNoSensitiveAuthParams(page.url());
+  });
+});

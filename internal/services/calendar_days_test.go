@@ -1,0 +1,426 @@
+package services
+
+import (
+	"testing"
+	"time"
+
+	"github.com/ovumcy/ovumcy-web/internal/models"
+)
+
+func TestBuildCalendarDayStatesUsesLatestLogPerDateDeterministically(t *testing.T) {
+	monthStart := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.February, 20, 0, 0, 0, 0, time.UTC)
+
+	logs := []models.DailyLog{
+		{
+			ID:       20,
+			Date:     time.Date(2026, time.February, 17, 20, 0, 0, 0, time.UTC),
+			IsPeriod: false,
+			Flow:     models.FlowNone,
+		},
+		{
+			ID:       10,
+			Date:     time.Date(2026, time.February, 17, 8, 0, 0, 0, time.UTC),
+			IsPeriod: true,
+			Flow:     models.FlowMedium,
+		},
+		{
+			ID:       30,
+			Date:     time.Date(2026, time.February, 18, 9, 0, 0, 0, time.UTC),
+			IsPeriod: true,
+			Flow:     models.FlowMedium,
+		},
+		{
+			ID:       31,
+			Date:     time.Date(2026, time.February, 18, 9, 0, 0, 0, time.UTC),
+			IsPeriod: false,
+			Flow:     models.FlowNone,
+		},
+	}
+
+	days := BuildCalendarDayStates(nil, monthStart, logs, CycleStats{}, now, time.UTC)
+
+	day17 := findCalendarDayStateByDateString(t, days, "2026-02-17")
+	if day17.IsPeriod {
+		t.Fatalf("expected 2026-02-17 period=false from latest log, got true")
+	}
+
+	day18 := findCalendarDayStateByDateString(t, days, "2026-02-18")
+	if day18.IsPeriod {
+		t.Fatalf("expected 2026-02-18 period=false from highest id tie-breaker, got true")
+	}
+}
+
+func TestCalendarLogRange(t *testing.T) {
+	monthStart := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	from, to := CalendarLogRange(monthStart)
+
+	if from.Format("2006-01-02") != "2025-11-23" {
+		t.Fatalf("expected range start 2025-11-23, got %s", from.Format("2006-01-02"))
+	}
+	if to.Format("2006-01-02") != "2026-05-09" {
+		t.Fatalf("expected range end 2026-05-09, got %s", to.Format("2006-01-02"))
+	}
+}
+
+func TestBuildCalendarDayStatesProjectsOvulationIntoFutureCycles(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.February, 23, 0, 0, 0, 0, time.UTC)
+
+	stats := CycleStats{
+		MedianCycleLength:    28,
+		AveragePeriodLength:  5,
+		LastPeriodStart:      time.Date(2026, time.February, 10, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.February, 23, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.February, 18, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.February, 24, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(nil, monthStart, nil, stats, now, time.UTC)
+
+	ovulationDay := findCalendarDayStateByDateString(t, days, "2026-03-23")
+	if !ovulationDay.IsOvulation {
+		t.Fatalf("expected projected ovulation marker on 2026-03-23")
+	}
+	if ovulationDay.IsFertility {
+		t.Fatalf("expected ovulation day to not be marked as fertile state")
+	}
+	if ovulationDay.IsPredicted {
+		t.Fatalf("did not expect ovulation day to be marked as predicted period")
+	}
+
+	preFertileDay := findCalendarDayStateByDateString(t, days, "2026-03-16")
+	if !preFertileDay.IsPreFertile {
+		t.Fatalf("expected projected pre-fertile marker on 2026-03-16")
+	}
+	if preFertileDay.IsPredicted || preFertileDay.IsFertility || preFertileDay.IsOvulation {
+		t.Fatalf("expected pre-fertile day to be distinct from predicted period, fertile, and ovulation states")
+	}
+}
+
+func TestBuildCalendarDayStatesIncludesCurrentBaselinePeriodWindow(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+
+	stats := CycleStats{
+		AveragePeriodLength: 5,
+		LastPeriodStart:     time.Date(2026, time.March, 8, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(nil, monthStart, nil, stats, now, time.UTC)
+
+	for _, dateString := range []string{"2026-03-08", "2026-03-09", "2026-03-10", "2026-03-11", "2026-03-12"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if !day.IsPredicted {
+			t.Fatalf("expected baseline period day %s to be marked as predicted period", dateString)
+		}
+	}
+
+	for _, dateString := range []string{"2026-03-13", "2026-03-14", "2026-03-15"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if !day.IsPreFertile {
+			t.Fatalf("expected baseline pre-fertile day %s to be marked as low-risk gap", dateString)
+		}
+		if day.IsPredicted || day.IsFertility || day.IsOvulation {
+			t.Fatalf("expected baseline pre-fertile day %s to stay distinct from other prediction states", dateString)
+		}
+	}
+}
+
+func findCalendarDayStateByDateString(t *testing.T, days []CalendarDayState, date string) CalendarDayState {
+	t.Helper()
+	for _, day := range days {
+		if day.DateString == date {
+			return day
+		}
+	}
+	t.Fatalf("calendar day %s not found", date)
+	return CalendarDayState{}
+}
+
+func TestBuildCalendarDayStatesDisablesPredictionsForUnpredictableCycle(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+
+	stats := CycleStats{
+		AveragePeriodLength:  5,
+		LastPeriodStart:      time.Date(2026, time.March, 8, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.April, 5, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.March, 18, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.March, 23, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.March, 23, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(&models.User{UnpredictableCycle: true}, monthStart, nil, stats, now, time.UTC)
+
+	for _, dateString := range []string{"2026-03-08", "2026-03-18", "2026-03-23", "2026-04-04"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if day.IsPredicted || day.IsPreFertile || day.IsFertility || day.IsOvulation || day.IsTentativeOvulation {
+			t.Fatalf("expected unpredictable cycle mode to suppress predictions on %s, got %#v", dateString, day)
+		}
+	}
+}
+
+func TestBuildCalendarDayStatesSuppressesPredictionsWhenPregnancyPaused(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+
+	stats := CycleStats{
+		AveragePeriodLength:  5,
+		LastPeriodStart:      time.Date(2026, time.March, 8, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.April, 5, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.March, 18, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.March, 23, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.March, 23, 0, 0, 0, 0, time.UTC),
+		PregnancyPaused:      true,
+	}
+
+	days := BuildCalendarDayStates(&models.User{}, monthStart, nil, stats, now, time.UTC)
+
+	for _, dateString := range []string{"2026-03-08", "2026-03-18", "2026-03-23", "2026-04-04"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if day.IsPredicted || day.IsPreFertile || day.IsFertility || day.IsOvulation || day.IsTentativeOvulation {
+			t.Fatalf("expected pregnancy pause to suppress calendar predictions on %s, got %#v", dateString, day)
+		}
+	}
+}
+
+func TestBuildCalendarDayStatesOpensEditDirectlyForFutureEmptyDays(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+
+	days := BuildCalendarDayStates(nil, monthStart, nil, CycleStats{}, now, time.UTC)
+
+	futureEmptyDay := findCalendarDayStateByDateString(t, days, "2026-03-15")
+	if !futureEmptyDay.OpenEditDirectly {
+		t.Fatalf("expected future empty day to open edit directly, got %#v", futureEmptyDay)
+	}
+}
+
+func TestBuildCalendarDayStatesMarksTentativeOvulationWhenBBTHasNoShift(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 14, 0, 0, 0, 0, time.UTC)
+
+	logs := []models.DailyLog{
+		{Date: time.Date(2026, time.March, 1, 7, 0, 0, 0, time.UTC), BBT: 36.40},
+		{Date: time.Date(2026, time.March, 2, 7, 0, 0, 0, time.UTC), BBT: 36.42},
+		{Date: time.Date(2026, time.March, 3, 7, 0, 0, 0, time.UTC), BBT: 36.41},
+		{Date: time.Date(2026, time.March, 4, 7, 0, 0, 0, time.UTC), BBT: 36.39},
+		{Date: time.Date(2026, time.March, 5, 7, 0, 0, 0, time.UTC), BBT: 36.43},
+		{Date: time.Date(2026, time.March, 6, 7, 0, 0, 0, time.UTC), BBT: 36.44},
+		{Date: time.Date(2026, time.March, 7, 7, 0, 0, 0, time.UTC), BBT: 36.45},
+		{Date: time.Date(2026, time.March, 8, 7, 0, 0, 0, time.UTC), BBT: 36.43},
+	}
+
+	stats := CycleStats{
+		LastPeriodStart:      time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.March, 29, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(&models.User{TrackBBT: true}, monthStart, logs, stats, now, time.UTC)
+
+	ovulationDay := findCalendarDayStateByDateString(t, days, "2026-03-15")
+	if !ovulationDay.IsTentativeOvulation {
+		t.Fatalf("expected tentative ovulation marker on 2026-03-15, got %#v", ovulationDay)
+	}
+	if ovulationDay.IsOvulation {
+		t.Fatalf("expected confirmed ovulation marker to be removed when no BBT shift is present")
+	}
+}
+
+// TestBuildCalendarDayStatesKeepsBBTDemotedDashInGridOnEveryRunDate is the
+// service-layer regression guard behind the BBT tentative-dash calendar e2e.
+// The demotion paints a single tentative-ovulation dash on the predicted
+// OvulationDate, but the calendar renders only the current month, whose
+// Sunday-aligned 6-week grid extends at most 6 days before the 1st and after
+// the last day. A past or future ovulation anchor can therefore slip past the
+// grid's leading/trailing edge in the first/last days of a month (which is how
+// the e2e flaked). Anchoring ovulation on today — last_period_start = today-13,
+// ovulation = cycleStart + 13 — keeps the dash in-grid on every run date.
+// Sweep a full year of run dates to lock that invariant in without a browser.
+func TestBuildCalendarDayStatesKeepsBBTDemotedDashInGridOnEveryRunDate(t *testing.T) {
+	location := time.UTC
+	firstRunDate := time.Date(2026, time.January, 1, 0, 0, 0, 0, location)
+	user := &models.User{TrackBBT: true}
+
+	for offset := 0; offset < 366; offset++ {
+		today := firstRunDate.AddDate(0, 0, offset)
+		todayKey := today.Format("2006-01-02")
+		cycleStart := today.AddDate(0, 0, -13)
+		stats := CycleStats{
+			LastPeriodStart: cycleStart,
+			OvulationDate:   today,
+			NextPeriodStart: cycleStart.AddDate(0, 0, 28),
+		}
+		monthStart := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, location)
+
+		days := BuildCalendarDayStates(user, monthStart, nil, stats, today, location)
+
+		dashDays := make([]string, 0, 1)
+		var todayState *CalendarDayState
+		for index := range days {
+			if days[index].IsTentativeOvulation {
+				dashDays = append(dashDays, days[index].DateString)
+			}
+			if days[index].DateString == todayKey {
+				todayState = &days[index]
+			}
+		}
+
+		if todayState == nil {
+			t.Fatalf("run date %s: today is not present in the rendered grid", todayKey)
+		}
+		if !todayState.IsTentativeOvulation {
+			t.Fatalf("run date %s: expected tentative dash on today, got %#v", todayKey, *todayState)
+		}
+		if todayState.IsOvulation {
+			t.Fatalf("run date %s: expected the demoted day to carry no confirmed dot", todayKey)
+		}
+		// Exactly one dash, on today. A confirmed dot may still appear elsewhere
+		// (the next predicted cycle), but it is asserted off the demoted day above.
+		if len(dashDays) != 1 || dashDays[0] != todayKey {
+			t.Fatalf("run date %s: expected exactly one tentative dash on today, got %v", todayKey, dashDays)
+		}
+	}
+}
+
+func TestBuildCalendarDayStatesSeparatesFertilityEdgeAndPeak(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 12, 0, 0, 0, 0, time.UTC)
+
+	stats := CycleStats{
+		LastPeriodStart:      time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.March, 29, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(nil, monthStart, nil, stats, now, time.UTC)
+
+	edgeDay := findCalendarDayStateByDateString(t, days, "2026-03-10")
+	if !edgeDay.IsFertilityEdge || edgeDay.IsFertilityPeak || !edgeDay.IsFertility {
+		t.Fatalf("expected 2026-03-10 to render as fertile edge, got %#v", edgeDay)
+	}
+
+	peakDay := findCalendarDayStateByDateString(t, days, "2026-03-14")
+	if peakDay.IsFertilityEdge || !peakDay.IsFertilityPeak || !peakDay.IsFertility {
+		t.Fatalf("expected 2026-03-14 to render as fertile peak, got %#v", peakDay)
+	}
+
+	ovulationDay := findCalendarDayStateByDateString(t, days, "2026-03-15")
+	if !ovulationDay.IsOvulation || !ovulationDay.IsFertilityPeak || ovulationDay.IsFertility {
+		t.Fatalf("expected ovulation day to keep the peak marker without fertile fill, got %#v", ovulationDay)
+	}
+}
+
+func TestBuildCalendarDayStatesKeepsConfirmedOvulationWhenBBTHasShift(t *testing.T) {
+	monthStart := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.March, 17, 0, 0, 0, 0, time.UTC)
+
+	logs := []models.DailyLog{
+		{Date: time.Date(2026, time.March, 10, 7, 0, 0, 0, time.UTC), BBT: 36.40},
+		{Date: time.Date(2026, time.March, 11, 7, 0, 0, 0, time.UTC), BBT: 36.42},
+		{Date: time.Date(2026, time.March, 12, 7, 0, 0, 0, time.UTC), BBT: 36.41},
+		{Date: time.Date(2026, time.March, 13, 7, 0, 0, 0, time.UTC), BBT: 36.39},
+		{Date: time.Date(2026, time.March, 14, 7, 0, 0, 0, time.UTC), BBT: 36.43},
+		{Date: time.Date(2026, time.March, 15, 7, 0, 0, 0, time.UTC), BBT: 36.66},
+		{Date: time.Date(2026, time.March, 16, 7, 0, 0, 0, time.UTC), BBT: 36.67},
+		{Date: time.Date(2026, time.March, 17, 7, 0, 0, 0, time.UTC), BBT: 36.69},
+	}
+
+	stats := CycleStats{
+		LastPeriodStart:      time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		NextPeriodStart:      time.Date(2026, time.April, 7, 0, 0, 0, 0, time.UTC),
+		OvulationDate:        time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+		FertilityWindowStart: time.Date(2026, time.March, 10, 0, 0, 0, 0, time.UTC),
+		FertilityWindowEnd:   time.Date(2026, time.March, 15, 0, 0, 0, 0, time.UTC),
+	}
+
+	days := BuildCalendarDayStates(&models.User{TrackBBT: true}, monthStart, logs, stats, now, time.UTC)
+
+	ovulationDay := findCalendarDayStateByDateString(t, days, "2026-03-15")
+	if !ovulationDay.IsOvulation {
+		t.Fatalf("expected confirmed ovulation marker to remain when BBT shift exists, got %#v", ovulationDay)
+	}
+	if ovulationDay.IsTentativeOvulation {
+		t.Fatalf("expected tentative ovulation marker to stay off when BBT shift exists")
+	}
+}
+
+func TestBuildCalendarDayStatesPaintsHistoricalFertileWindowsWhenEnabled(t *testing.T) {
+	// Two consecutive cycle starts 28 days apart with luteal phase 14 imply
+	// ovulation on cycle day 14 (= cycle_start + 13 days). For a cycle starting
+	// 2026-01-04 the historical ovulation falls on 2026-01-17, with a fertile
+	// window of [2026-01-12, 2026-01-17] and a pre-fertile gap of
+	// [2026-01-09, 2026-01-11] (period of 5 days ending 2026-01-08).
+	monthStart := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.February, 15, 0, 0, 0, 0, time.UTC)
+
+	logs := []models.DailyLog{
+		{Date: time.Date(2026, time.January, 4, 0, 0, 0, 0, time.UTC), IsPeriod: true, CycleStart: true, Flow: models.FlowMedium},
+		{Date: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC), IsPeriod: true, CycleStart: true, Flow: models.FlowMedium},
+	}
+	stats := CycleStats{
+		AverageCycleLength:  28,
+		MedianCycleLength:   28,
+		AveragePeriodLength: 5,
+		LutealPhase:         14,
+		LastPeriodStart:     time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+	}
+	user := &models.User{ShowHistoricalPhases: true}
+
+	days := BuildCalendarDayStates(user, monthStart, logs, stats, now, time.UTC)
+
+	ovulation := findCalendarDayStateByDateString(t, days, "2026-01-17")
+	if !ovulation.IsOvulation {
+		t.Fatalf("expected historical ovulation marker on 2026-01-17, got %#v", ovulation)
+	}
+
+	for _, dateString := range []string{"2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-17"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if !day.IsFertility && !day.IsOvulation {
+			t.Fatalf("expected historical fertility marker on %s, got %#v", dateString, day)
+		}
+	}
+
+	for _, dateString := range []string{"2026-01-09", "2026-01-10", "2026-01-11"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if !day.IsPreFertile {
+			t.Fatalf("expected historical pre-fertile gap on %s, got %#v", dateString, day)
+		}
+	}
+}
+
+func TestBuildCalendarDayStatesHidesHistoricalFertileWindowsByDefault(t *testing.T) {
+	monthStart := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, time.February, 15, 0, 0, 0, 0, time.UTC)
+
+	logs := []models.DailyLog{
+		{Date: time.Date(2026, time.January, 4, 0, 0, 0, 0, time.UTC), IsPeriod: true, CycleStart: true, Flow: models.FlowMedium},
+		{Date: time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC), IsPeriod: true, CycleStart: true, Flow: models.FlowMedium},
+	}
+	stats := CycleStats{
+		AverageCycleLength:  28,
+		MedianCycleLength:   28,
+		AveragePeriodLength: 5,
+		LutealPhase:         14,
+		LastPeriodStart:     time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+	}
+	// Default ShowHistoricalPhases is false; explicit zero-value User confirms
+	// the upstream behavior is preserved when the toggle is not opted in.
+	user := &models.User{}
+
+	days := BuildCalendarDayStates(user, monthStart, logs, stats, now, time.UTC)
+
+	for _, dateString := range []string{"2026-01-12", "2026-01-13", "2026-01-14", "2026-01-15", "2026-01-16", "2026-01-17"} {
+		day := findCalendarDayStateByDateString(t, days, dateString)
+		if day.IsFertility || day.IsOvulation {
+			t.Fatalf("expected no historical fertility paint on %s when toggle is off, got %#v", dateString, day)
+		}
+	}
+}

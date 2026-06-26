@@ -1,0 +1,46 @@
+.git
+.github
+.local
+
+.env
+.env.*
+!.env.example
+
+data/
+node_modules/
+e2e/
+docs/
+test-results/
+playwright-report/
+
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.out
+coverage.*
+profile.cov
+
+# Test code must stay in the public repo but never ship in the runtime image.
+# The build runs only `go build`, which ignores these; CI tests from a repo
+# checkout, not the Docker context. internal/i18n and internal/templates are
+# copied wholesale into the scratch image, so without this their *_test.go files
+# would leak into production.
+**/*_test.go
+**/testdata/
+.mutation/
+
+.idea/
+.vscode/
+
+.tmp_*/
+.tmp*/
+
+docker/
+web/src/
+scripts/
+package.json
+package-lock.json
+tailwind.config.js
+eslint.config.mjs
+playwright.config.ts

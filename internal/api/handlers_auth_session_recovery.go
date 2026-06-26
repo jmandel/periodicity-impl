@@ -1,0 +1,118 @@
+package api
+
+import (
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/ovumcy/ovumcy-web/internal/services"
+)
+
+func (handler *Handler) ForgotPassword(c *fiber.Ctx) error {
+	if !handler.localPublicAuthEnabled() {
+		spec := authLocalRecoveryDisabledErrorSpec()
+		handler.logSecurityError(c, "auth.recovery_start", spec)
+		if acceptsJSON(c) || isHTMX(c) {
+			return handler.respondMappedError(c, spec)
+		}
+		handler.setFlashCookie(c, FlashPayload{AuthError: spec.Key})
+		return c.Redirect("/login", fiber.StatusSeeOther)
+	}
+	now := time.Now().In(handler.location)
+	input, parseError := parseForgotPasswordInput(c)
+	if parseError != "" {
+		spec := authValidationErrorSpec(parseError)
+		handler.logSecurityError(c, "auth.recovery_start", spec)
+		return handler.respondMappedError(c, spec)
+	}
+
+	if strings.TrimSpace(input.RecoveryCode) == "" {
+		if acceptsJSON(c) {
+			return c.JSON(fiber.Map{
+				"ok":        true,
+				"next_step": "recovery_code",
+			})
+		}
+		handler.setFlashCookie(c, FlashPayload{
+			ForgotEmail: input.Email,
+		})
+		return redirectToPath(c, "/forgot-password")
+	}
+
+	token, err := handler.passwordResetSvc.StartRecovery(
+		c.UserContext(),
+		handler.secretKey,
+		c.IP(),
+		input.Email,
+		input.RecoveryCode,
+		now,
+		30*time.Minute,
+	)
+	if err != nil {
+		spec := mapPasswordRecoveryStartError(err)
+		handler.logSecurityError(c, "auth.recovery_start", spec)
+		return handler.respondMappedError(c, spec)
+	}
+	if err := handler.setResetPasswordCookie(c, token, false); err != nil {
+		spec := authResetTokenCreateErrorSpec()
+		handler.logSecurityError(c, "auth.recovery_start", spec)
+		return handler.respondMappedError(c, spec)
+	}
+	handler.logSecurityEvent(c, "auth.recovery_start", "success")
+
+	if acceptsJSON(c) {
+		return c.JSON(fiber.Map{
+			"ok": true,
+		})
+	}
+
+	return redirectToPath(c, "/reset-password")
+}
+
+func (handler *Handler) ResetPassword(c *fiber.Ctx) error {
+	input, parseError := parseResetPasswordInput(c)
+	if parseError != "" {
+		spec := authValidationErrorSpec(parseError)
+		handler.logSecurityError(c, "auth.reset_password", spec)
+		return handler.respondMappedError(c, spec)
+	}
+
+	token, _ := handler.readResetPasswordCookie(c)
+	if token == "" {
+		handler.clearResetPasswordCookie(c)
+		spec := invalidResetTokenErrorSpec()
+		handler.logSecurityError(c, "auth.reset_password", spec)
+		return handler.respondMappedError(c, spec)
+	}
+	user, recoveryCode, err := handler.passwordResetSvc.CompleteReset(
+		c.UserContext(),
+		handler.secretKey,
+		token,
+		input.Password,
+		input.ConfirmPassword,
+		time.Now(),
+	)
+	if err != nil {
+		spec := mapPasswordResetCompleteError(err)
+		if spec.Key == "invalid reset token" {
+			handler.clearResetPasswordCookie(c)
+		}
+		handler.logSecurityError(c, "auth.reset_password", spec)
+		return handler.respondMappedError(c, spec)
+	}
+
+	if _, err := handler.setAuthCookie(c, user, true); err != nil {
+		spec := authSessionCreateErrorSpec()
+		if errors.Is(err, services.ErrAuthUnsupportedRole) {
+			spec = authWebSignInUnavailableErrorSpec()
+		}
+		handler.logSecurityError(c, "auth.reset_password", spec)
+		return handler.respondMappedError(c, spec)
+	}
+	handler.clearOIDCLogoutBridgeCookie(c)
+	handler.clearResetPasswordCookie(c)
+	handler.logSecurityEvent(c, "auth.reset_password", "success")
+
+	return handler.renderRecoveryCodeResponse(c, user, recoveryCode, fiber.StatusOK)
+}

@@ -1,0 +1,156 @@
+import { expect, test, type Page } from '@playwright/test';
+import {
+  completeOnboardingIfPresent,
+  continueFromRecoveryCode,
+  cookieByName,
+  createCredentials,
+  expectInlineRegisterRecoveryStep,
+  readRecoveryCode,
+  registerOwnerViaUI,
+} from './support/auth-helpers';
+import { ensureNotesFieldVisible } from './support/note-helpers';
+
+async function registerOwnerAndReachDashboard(page: Page, prefix: string) {
+  const creds = createCredentials(prefix);
+
+  await registerOwnerViaUI(page, creds);
+  await expectInlineRegisterRecoveryStep(page);
+
+  await readRecoveryCode(page);
+  await continueFromRecoveryCode(page);
+  await completeOnboardingIfPresent(page);
+
+  await page.goto('/dashboard');
+  await expect(page).toHaveURL(/\/dashboard$/);
+
+  return creds;
+}
+
+async function registerOwnerAndOpenSettings(page: Page, prefix: string): Promise<void> {
+  await registerOwnerAndReachDashboard(page, prefix);
+  await page.goto('/settings');
+  await expect(page).toHaveURL(/\/settings$/);
+}
+
+async function openTodayNotes(page: Page): Promise<void> {
+  await ensureNotesFieldVisible(page, '#today-notes');
+}
+
+async function readCSRFToken(page: Page): Promise<string> {
+  const csrfToken = await page.locator('meta[name="csrf-token"]').getAttribute('content');
+  expect(csrfToken).toBeTruthy();
+  return csrfToken ?? '';
+}
+
+test.describe('Security and role-based access', () => {
+  test('xss in profile display name is rejected and never executes', async ({ page }) => {
+    await registerOwnerAndOpenSettings(page, 'security-xss-profile');
+
+    let dialogTriggered = false;
+    page.on('dialog', async (dialog) => {
+      dialogTriggered = true;
+      await dialog.dismiss();
+    });
+
+    const payload = `<img src=x onerror=alert('xss-profile')>`;
+    await page.locator('#settings-display-name').fill(payload);
+    await page.locator('form[action="/api/v1/users/current/profile"] button[data-save-button]').click();
+
+    const primaryNavUserChip = page.locator('[data-nav-account-actions] #nav-user-chip-desktop');
+
+    await expect(page.locator('#settings-profile-status .status-error')).toBeVisible();
+    await expect(page.locator('#settings-profile-status .status-ok')).toHaveCount(0);
+    await expect(primaryNavUserChip).not.toContainText('xss-profile');
+    await expect(primaryNavUserChip.locator('img')).toHaveCount(0);
+    await expect(page.locator('#settings-display-name')).toHaveValue(payload);
+    await expect(page.locator('#settings-account img')).toHaveCount(0);
+
+    await page.waitForTimeout(250);
+    expect(dialogTriggered).toBe(false);
+  });
+
+  test('xss payload in notes is stored as plain text and does not execute', async ({ page }) => {
+    await registerOwnerAndReachDashboard(page, 'security-xss-notes');
+
+    let dialogTriggered = false;
+    page.on('dialog', async (dialog) => {
+      dialogTriggered = true;
+      await dialog.dismiss();
+    });
+
+    const todayAction = await page.locator('form[hx-put^="/api/v1/days/"]').first().getAttribute('hx-put');
+    expect(todayAction).toMatch(/^\/api\/v1\/days\/\d{4}-\d{2}-\d{2}$/);
+    const savedDay = String(todayAction || '').replace('/api/v1/days/', '');
+
+    const payload = `<script>alert('xss-notes')</script><img src=x onerror=alert('xss-notes-img')>`;
+    await openTodayNotes(page);
+    await page.locator('#today-notes').fill(payload);
+    await page.locator('button[data-save-button]').first().click();
+    await expect(page.locator('#save-status .status-ok')).toBeVisible();
+
+    const month = savedDay.slice(0, 7);
+    await page.goto(`/calendar?month=${month}&day=${savedDay}`);
+    await expect(page).toHaveURL(new RegExp(`/calendar\\?month=${month}&day=${savedDay}`));
+    await expect(page.locator('#day-editor')).toContainText(payload);
+
+    await page.waitForTimeout(250);
+    expect(dialogTriggered).toBe(false);
+  });
+
+  test('csrf basics: missing token is rejected for state-changing endpoints', async ({ page }) => {
+    const creds = await registerOwnerAndReachDashboard(page, 'security-csrf');
+
+    const logoutNoCsrf = await page.request.delete('/api/v1/sessions/current', {
+      form: {},
+      maxRedirects: 0,
+    });
+    expect(logoutNoCsrf.status()).toBe(403);
+
+    const clearNoCsrf = await page.request.post('/api/v1/users/current/data-wipe', {
+      form: {},
+      maxRedirects: 0,
+    });
+    expect(clearNoCsrf.status()).toBe(403);
+
+    // /api/v1/exports/* is GET-only on the v1 surface; CSRF only gates
+    // state-changing methods, so an export without CSRF returns 200, not 403.
+
+    const csrfToken = await readCSRFToken(page);
+
+    const clearWithCsrf = await page.request.post('/api/v1/users/current/data-wipe', {
+      form: {
+        csrf_token: csrfToken,
+        password: creds.password,
+      },
+      maxRedirects: 0,
+    });
+    expect([200, 303]).toContain(clearWithCsrf.status());
+  });
+
+  test('auth cookie keeps expected security flags', async ({ page, context }) => {
+    await registerOwnerAndReachDashboard(page, 'security-cookie-flags');
+
+    const authCookie = await cookieByName(context, 'ovumcy_auth');
+    expect(authCookie).toBeTruthy();
+    expect(authCookie?.httpOnly).toBe(true);
+
+    const isHttps = page.url().startsWith('https://');
+    expect(authCookie?.secure).toBe(isHttps);
+  });
+
+  test('owner can access owner-only sections and export', async ({ page }) => {
+    await registerOwnerAndOpenSettings(page, 'security-owner-access');
+
+    await expect(page.locator('section#settings-cycle')).toBeVisible();
+    await expect(page.locator('#settings-symptoms-section')).toBeVisible();
+    await expect(page.locator('[data-export-section]')).toBeVisible();
+    await expect(page.locator('form[action="/api/v1/users/current/data-wipe"]')).toBeVisible();
+
+    const exportResponse = await page.request.get('/api/v1/exports/csv', {
+      form: { csrf_token: await readCSRFToken(page) },
+    });
+    expect(exportResponse.status()).toBe(200);
+    expect(exportResponse.headers()['content-type'] || '').toContain('text/csv');
+  });
+
+});

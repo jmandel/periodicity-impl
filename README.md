@@ -1,0 +1,423 @@
+[![CI](https://github.com/ovumcy/ovumcy-web/actions/workflows/ci.yml/badge.svg)](https://github.com/ovumcy/ovumcy-web/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ovumcy/ovumcy-web/actions/workflows/codeql.yml/badge.svg)](https://github.com/ovumcy/ovumcy-web/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/ovumcy/ovumcy-web/badge)](https://securityscorecards.dev/viewer/?uri=github.com/ovumcy/ovumcy-web)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13130/badge)](https://www.bestpractices.dev/projects/13130)
+[![Coverage](https://codecov.io/gh/ovumcy/ovumcy-web/graph/badge.svg)](https://app.codecov.io/gh/ovumcy/ovumcy-web)
+[![Tested](https://img.shields.io/badge/tested-mutation%20%C2%B7%20fuzz%20%C2%B7%20property-2ea44f)](https://github.com/ovumcy/ovumcy-web/blob/main/TESTING.md)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ovumcy/ovumcy-web)](https://goreportcard.com/report/github.com/ovumcy/ovumcy-web)
+[![Release](https://img.shields.io/github/v/release/ovumcy/ovumcy-web?display_name=tag)](https://github.com/ovumcy/ovumcy-web/releases)
+[![Last Commit](https://img.shields.io/github/last-commit/ovumcy/ovumcy-web)](https://github.com/ovumcy/ovumcy-web/commits/main)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ovumcy/ovumcy-web.svg)](https://pkg.go.dev/github.com/ovumcy/ovumcy-web)
+[![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://go.dev/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker)](https://github.com/ovumcy/ovumcy-web/actions/workflows/docker-image.yml)
+[![Self-hosted](https://img.shields.io/badge/Self--hosted-yes-2ea44f)](https://github.com/ovumcy/ovumcy-web/blob/main/docs/self-hosted.md)
+[![No telemetry](https://img.shields.io/badge/Telemetry-none-2ea44f)](https://github.com/ovumcy/ovumcy-web#privacy-and-security)
+
+<p align="center">
+  <img src="docs/screenshots/ovumcy-logo-horizontal.svg" alt="Ovumcy" width="640">
+</p>
+
+<p align="center">
+  <strong>A menstrual cycle tracker you run yourself. Your data stays on your server.</strong>
+</p>
+
+Ovumcy is a privacy-first, self-hosted menstrual cycle tracker.
+It is built for people who want fast daily tracking, useful cycle insights, and data that stays under their control.
+
+Ovumcy runs as a single Go service with a server-rendered web UI, can be installed on a phone home screen, and supports SQLite by default with Postgres as an advanced self-hosted path.
+
+This README describes the current `main` branch. The latest tagged release is `v1.3.0`.
+The public project site is [ovumcy.com](https://ovumcy.com).
+
+## Why Ovumcy Exists
+
+Most cycle tracking apps depend on cloud accounts, analytics, or third-party infrastructure.
+
+Ovumcy is designed as a self-hosted alternative for people who want simple daily tracking, useful cycle insights, and full control over sensitive health data.
+
+## How Ovumcy Is Different
+
+Different cycle trackers optimize for different things. Here is how the product models compare.
+
+This comparison focuses on product models rather than specific brands, because privacy, export, and telemetry policies vary between apps.
+
+| Capability | Ovumcy | Local-first app | Cloud-first tracker |
+| --- | --- | --- | --- |
+| Self-hosted by the user or operator | :white_check_mark: | Device-local | :x: |
+| No vendor account required | :white_check_mark: | :white_check_mark: | :x: |
+| Multi-device browser access | :white_check_mark: | :x: | :white_check_mark: |
+| No telemetry or ad trackers by product default | :white_check_mark: | Varies | Varies |
+| Open data export | :white_check_mark: | Varies | Varies |
+| Operator-controlled storage | :white_check_mark: | Device-only | :x: |
+
+Ovumcy trades single-device simplicity for self-hosted control, operator-managed storage, and browser access from any device.
+
+## Demo
+
+<p align="center">
+  <img src="docs/demo.gif" alt="Ovumcy demo — sign up, onboarding, dashboard, calendar, settings, and dark theme" width="720">
+</p>
+
+## Screenshots
+
+### Get Started Quickly
+
+![Ovumcy registration screen](docs/screenshots/register.jpg)
+
+### Check Today at a Glance
+
+![Ovumcy dashboard screen](docs/screenshots/dashboard.jpg)
+
+### Review the Month
+
+![Ovumcy calendar screen](docs/screenshots/calendar.jpg)
+
+### Export What You Need
+
+![Ovumcy export settings screen](docs/screenshots/settings-export.jpg)
+
+### Install It on a Phone
+
+![Ovumcy mobile install prompt](docs/screenshots/install-prompt.png)
+
+### Use a Comfortable Dark Theme
+
+![Ovumcy dark theme screen](docs/screenshots/dark-theme.jpg)
+
+The privacy-safe hero demo asset pack, including the mobile install prompt capture contract, lives in [docs/hero-demo.md](docs/hero-demo.md).
+
+## Short FAQ
+
+### Does Ovumcy require a cloud account?
+
+No. Ovumcy is designed to run as a self-hosted application under your control.
+
+### Where is the data stored?
+
+On the server where you deploy Ovumcy. SQLite is the default baseline, and PostgreSQL is available for more advanced self-hosted setups.
+
+### Does Ovumcy use analytics or ad trackers?
+
+No. Ovumcy is designed without telemetry or advertising trackers.
+
+### Can I export my data?
+
+Yes. Ovumcy supports CSV and JSON export so your records stay portable. See [docs/export.md](docs/export.md) for the exact JSON shape, CSV columns, and stability contract.
+
+### Is there an HTTP API specification?
+
+Yes. The canonical JSON surface lives at `/api/v1/*` and is described in [docs/openapi.yaml](docs/openapi.yaml) (OpenAPI 3.1). `/api/v1/*` is the stable contract for external clients and wrappers — see [CONTRIBUTING.md](CONTRIBUTING.md) for the API Stability Contract. Building a wrapper? Start with `GET /api/v1/users/current` to confirm the session subject, then branch on the documented status code plus `error_detail.category` for error handling.
+
+### Do I need technical knowledge to install Ovumcy?
+
+Basic familiarity with Docker is enough for the supported quick start. A `docker-compose.yml` with working defaults is included in the repository.
+
+### Is Ovumcy a medical product?
+
+No. Ovumcy provides estimates and logs based on recorded data. It is not a medical device and should not be treated as diagnostic or treatment advice.
+
+Period and fertile-window predictions in particular are statistical estimates derived from the cycle data you log. They are not a contraceptive method, a fertility treatment, or a substitute for medical care. Use a medically appropriate method when you need one.
+
+## Features
+
+- Daily tracking for period days, flow intensity, symptoms, and notes.
+- Owner-managed custom symptoms with create, rename, hide, and restore flows that preserve historical records.
+- Predictions for next period, ovulation, fertile window, and cycle phase.
+- Calendar and statistics views for longer-term pattern spotting.
+- Mobile home-screen install support on the current `main` branch.
+- CSV and JSON export for backup, portability, and personal review.
+- Optional OIDC sign-in in hybrid or SSO-only mode, with guarded owner auto-provision and provider logout support.
+- Optional TOTP two-factor authentication for owner sign-in, compatible with any RFC 6238 authenticator app (Google Authenticator, 1Password, Aegis, etc.).
+- English, Russian, Spanish, French, and German localization.
+- Self-hosted deployment with Docker or a single Go binary.
+
+## How Predictions Work
+
+Ovumcy works out ovulation, the fertile window, and your next period from the
+dates you log. There are no sensors and no hormone readings involved; it is
+calendar math, and the model is deliberately simple:
+
+- Your next period is your last period start plus your typical cycle length (the
+  median of your recent cycles).
+- Ovulation is counted back from there. The luteal phase, from ovulation to the
+  next period, is treated as about 14 days by default — and refined toward your
+  own value when your temperature or cervical-mucus entries allow — so ovulation
+  lands near cycle length minus the luteal length.
+- The fertile window is the six days ending on ovulation day, since sperm can
+  survive a few days and the egg about one.
+
+These are estimates, not medical advice and not a form of contraception, and they
+get less reliable for irregular cycles.
+
+The full algorithm, with every constant and edge case, is in
+[docs/cycle-prediction.md](docs/cycle-prediction.md). The worked examples there are
+checked by reference tests, so the doc and the code stay in sync. You can read how
+a prediction is made and check it against the numbers yourself.
+
+## Supported Languages
+
+| Language | Code | UI support | `DEFAULT_LANGUAGE` |
+| --- | --- | --- | --- |
+| English | `en` | Full first-party UI localization | Supported |
+| Russian | `ru` | Full first-party UI localization | Supported |
+| Spanish | `es` | Full first-party UI localization | Supported |
+| French | `fr` | Full first-party UI localization | Supported |
+| German | `de` | Full first-party UI localization | Supported |
+
+These are the currently supported first-party UI languages. Operators can set `DEFAULT_LANGUAGE` to any of the codes above, and users can switch language from the UI without changing deployment defaults.
+
+## Privacy and Security
+
+- No analytics, ad trackers, or remote telemetry.
+- No outbound network calls in the default configuration. When OIDC is enabled, the server only talks to the configured identity provider.
+- First-party cookies only; see [SECURITY.md](SECURITY.md#cookies) for the full inventory and attributes.
+- Data stays on infrastructure you control.
+- Automated security checks cover CodeQL, gosec, Trivy filesystem/container scans, and CycloneDX SBOM generation in GitHub Actions.
+- SQLite is the baseline default; Postgres is available for advanced self-hosted deployments through official example stacks.
+- Optional TOTP 2FA: secrets are AES-256-GCM encrypted at rest with per-row aad binding, the login challenge and disable-confirmation endpoints are rate-limited, and replayed codes are rejected within the 30-second verifier window.
+
+Operator-facing GDPR compliance walkthrough lives in [docs/gdpr.md](docs/gdpr.md) (lawful basis, encryption-at-rest guidance, DSAR via export, breach notification runbook). The repo-visible security invariants live in [docs/SECURITY_INVARIANTS.md](docs/SECURITY_INVARIANTS.md); the GDPR cross-reference table is in [SECURITY.md → GDPR Cross-Reference](SECURITY.md#gdpr-cross-reference).
+
+If you found a security issue, see [SECURITY.md](SECURITY.md).
+
+## Clients And Deployment Models
+
+Ovumcy now has two public product shapes:
+
+- [`ovumcy-web`](https://github.com/ovumcy/ovumcy-web) is the self-hosted all-in-one web application and server in this repository.
+- [`ovumcy-app`](https://github.com/ovumcy/ovumcy-app) is the local-first mobile client for iOS and Android.
+
+For the mobile client, optional self-hosted encrypted sync is provided by [`ovumcy-sync-community`](https://github.com/ovumcy/ovumcy-sync-community).
+
+In other words:
+
+- choose `ovumcy-web` when you want one self-hosted server with a browser UI;
+- choose `ovumcy-app` when you want an on-device local-first mobile experience;
+- add `ovumcy-sync-community` only when the mobile app needs self-hosted encrypted backup, restore, or multi-device sync.
+
+## Architecture
+
+```text
+Browser / Mobile Home Screen
+            |
+            v
+   Reverse Proxy (optional)
+            |
+            v
+       Ovumcy Server
+            |
+            v
+SQLite (default) / PostgreSQL (advanced)
+```
+
+- `Browser UI`: server-rendered HTML with HTMX and plain JavaScript, plus mobile home-screen install support.
+- `Go application`: a single service that handles routing, templates, i18n, and domain logic.
+- `Storage`: SQLite is the baseline default; Postgres is an advanced self-hosted option.
+- `Deployment`: one binary or container, typically behind a reverse proxy.
+
+## Tech Stack
+
+- Backend: Go, Fiber, GORM.
+- Frontend: server-rendered HTML templates, HTMX, plain JavaScript, Tailwind CSS.
+- Storage: SQLite (baseline) or Postgres (advanced self-hosted).
+- Deployment: Docker or direct binary execution.
+
+## Quick Start
+
+### Docker
+
+Uses the prebuilt image from GHCR pinned to the latest tagged release by default (`ghcr.io/ovumcy/ovumcy-web:v1.3.0`).
+
+Tagged releases from `v0.7.1` onward publish under the GHCR namespace `ghcr.io/ovumcy/ovumcy-web`.
+
+For public GHCR images, pull does not require GitHub login. `docker compose up -d` is enough because `pull_policy: always` is enabled.
+
+```bash
+mkdir -p ovumcy && cd ovumcy
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/ovumcy/ovumcy-web/main/docker-compose.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/ovumcy/ovumcy-web/main/.env.example
+# set SECRET_KEY in .env, or mount a secret file and set SECRET_KEY_FILE
+docker compose up -d
+```
+
+Override the pinned default image tag if needed:
+
+```bash
+OVUMCY_IMAGE=ghcr.io/ovumcy/ovumcy-web:v1.3.0 docker compose up -d
+```
+
+Then open `http://127.0.0.1:8080`.
+
+The base compose file now binds to loopback by default. For an intentional LAN/private-network bind, set `HOST_BIND_ADDRESS` in `.env` to a specific private IP you control before starting the stack.
+
+For production-style setups:
+
+- use the dedicated reverse-proxy examples from [docs/self-hosted.md](docs/self-hosted.md) instead of exposing `8080` directly;
+- use [docs/examples/postgres/docker-compose.yml](docs/examples/postgres/docker-compose.yml) together with [docs/examples/postgres/.env.example](docs/examples/postgres/.env.example) for the official local/private Postgres path;
+- choose one storage engine per deployment, because there is no automatic SQLite-to-Postgres migration tool yet.
+
+### Manual
+
+Requirements:
+
+- Go 1.26+
+- Node.js 22+
+
+```bash
+git clone https://github.com/ovumcy/ovumcy-web.git
+cd ovumcy-web
+npm ci
+npm run build
+export SECRET_KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+go run ./cmd/ovumcy
+```
+
+Or keep the secret in a readable file and point `SECRET_KEY_FILE` at that path:
+
+```bash
+export SECRET_KEY_FILE=/absolute/path/to/ovumcy-secret.txt
+go run ./cmd/ovumcy
+```
+
+PowerShell:
+
+```powershell
+$env:SECRET_KEY = node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+go run ./cmd/ovumcy
+```
+
+```powershell
+$env:SECRET_KEY_FILE = "C:\\path\\to\\ovumcy-secret.txt"
+go run ./cmd/ovumcy
+```
+
+## Configuration
+
+Most self-hosted setups only need a small set of variables:
+
+```env
+TZ=UTC
+DEFAULT_LANGUAGE=en
+REGISTRATION_MODE=open
+# Set one secret source before first start. SECRET_KEY wins if both are set.
+SECRET_KEY=
+# SECRET_KEY_FILE=/run/secrets/ovumcy_secret_key
+PORT=8080
+HOST_BIND_ADDRESS=127.0.0.1
+COOKIE_SECURE=false
+
+DB_DRIVER=sqlite
+DB_PATH=data/ovumcy.db
+# DATABASE_URL=postgres://ovumcy:change-me@127.0.0.1:5432/ovumcy?sslmode=disable
+
+TRUST_PROXY_ENABLED=false
+PROXY_HEADER=X-Forwarded-For
+TRUSTED_PROXIES=127.0.0.1,::1
+
+# Per-action audit logs to stderr. Default off. Enable only when investigating an incident.
+AUDIT_LOG_ENABLED=false
+
+# Optional OIDC sign-in / SSO
+# OIDC_ENABLED=true
+# OIDC_ISSUER_URL=https://id.example.com
+# OIDC_CLIENT_ID=ovumcy
+# OIDC_CLIENT_SECRET=replace_with_a_client_secret
+# OIDC_REDIRECT_URL=https://ovumcy.example.com/auth/oidc/callback
+# OIDC_CA_FILE=/run/certs/oidc-provider-ca.pem
+# OIDC_LOGIN_MODE=hybrid
+# OIDC_AUTO_PROVISION=false
+# OIDC_AUTO_PROVISION_ALLOWED_DOMAINS=
+# OIDC_LOGOUT_MODE=local
+# OIDC_POST_LOGOUT_REDIRECT_URL=https://ovumcy.example.com/login
+```
+
+Important notes:
+
+- Always set a strong secret through `SECRET_KEY` or `SECRET_KEY_FILE`.
+- `SECRET_KEY_FILE` must point to a readable file path for the running process. In Docker-based deployments, that means a path inside the container after you mount the file.
+- `SECRET_KEY` takes precedence if both `SECRET_KEY` and `SECRET_KEY_FILE` are set.
+- `DEFAULT_LANGUAGE` supports `en`, `ru`, `es`, `fr`, and `de`.
+- `REGISTRATION_MODE` supports `open` and `closed`; use `closed` for pre-provisioned or otherwise operator-restricted internet-facing instances where self-service sign-up must stay disabled.
+- `HOST_BIND_ADDRESS=127.0.0.1` keeps the base compose path local/private by default. Only change it deliberately for a specific private-network bind.
+- Set `COOKIE_SECURE=true` when serving over HTTPS.
+- `AUDIT_LOG_ENABLED` is off by default. Per-action security-event lines are suppressed; Go panics, startup errors, and the Fiber request log stay enabled. Flip to `true` only when investigating a specific incident, and remember the resulting stream contains `user_id` and is as sensitive as the database. See [SECURITY.md](SECURITY.md#logging-policy).
+- OIDC sign-in is optional, supports `hybrid` and `oidc_only` login modes, and requires HTTPS plus `COOKIE_SECURE=true`.
+- `OIDC_CA_FILE` is optional and lets Ovumcy trust a readable PEM CA bundle for private or internal identity-provider certificates.
+- The first OIDC sign-in uses an existing `(issuer, subject)` link when present, otherwise it falls back to a verified email match.
+- `OIDC_AUTO_PROVISION=true` is supported only with `REGISTRATION_MODE=open`; it creates `owner` accounts and can be restricted with `OIDC_AUTO_PROVISION_ALLOWED_DOMAINS`.
+- Auto-provisioned users start without a local password. They can set one later in `Settings` to enable recovery codes and password-confirmed danger-zone actions.
+- `OIDC_LOGOUT_MODE` controls whether logout stays local or redirects to the provider when discovery metadata includes `end_session_endpoint`.
+- [docs/oidc.md](docs/oidc.md) includes a provider compatibility matrix: local-test-stack-verified support for Keycloak, authentik, and Authelia; Pocket ID 2.7.0+ reported-supported pending Ovumcy re-verification; current hardened-model exclusion for Dex; and ZITADEL deployment requirements for browser sign-in. The matrix carries a "Last verified in" Ovumcy release column — see the doc for the test-stack scope and re-verification responsibility.
+- Enable `TRUST_PROXY_ENABLED` only when running behind a trusted reverse proxy.
+- SQLite is the supported baseline default; Postgres is an advanced self-hosted path that requires `DATABASE_URL`.
+- Keep database storage persistent, whether that is a SQLite volume/bind mount or operator-managed Postgres storage.
+- Full deployment, backup, reverse-proxy, and Postgres guidance lives in [docs/self-hosted.md](docs/self-hosted.md).
+
+For deployment paths, reverse-proxy examples, backups, restores, and advanced Postgres setups, see [docs/self-hosted.md](docs/self-hosted.md). For provider-specific OIDC/SSO setup, see [docs/oidc.md](docs/oidc.md).
+
+## Operator CLI
+
+For self-hosted operators, the binary includes a small local-only CLI for account audit, removal, and emergency password reset:
+
+```bash
+go run ./cmd/ovumcy users list
+go run ./cmd/ovumcy users delete owner@example.com
+go run ./cmd/ovumcy users delete owner@example.com --yes
+go run ./cmd/ovumcy reset-password owner@example.com
+```
+
+Notes:
+
+- `users list` prints a minimal account audit table: `id`, `email`, `role`, `display name`, onboarding state, and creation time.
+- `users delete <email>` removes the selected account together with related health data and prompts for an explicit `DELETE` confirmation unless `--yes` is provided.
+- `reset-password <email>` prompts for a new password interactively, validates it against the password policy, writes its bcrypt hash to the account, and atomically bumps `auth_session_version` so every existing session is invalidated. Use this when an owner has lost both their password and their recovery code.
+- Treat CLI usage as operator-only access. It is intended for local shell access on the instance, not for browser or remote public administration.
+
+## Development
+
+Common commands from the repository root:
+
+```bash
+go test ./...
+npm run build
+go run ./cmd/ovumcy
+```
+
+Project structure:
+
+- `cmd/ovumcy` - application entrypoint and runtime bootstrap
+- `internal/api` - HTTP transport, handlers, and response mapping
+- `internal/services` - domain logic
+- `internal/db` - persistence and migrations
+- `web/` - templates, JavaScript, and CSS assets
+
+CI runs staticcheck, `go vet`, tests, and frontend build on pushes and pull requests.
+Dedicated security workflows run CodeQL plus `gosec`, `govulncheck`, Trivy filesystem/container scanning, and publish a CycloneDX image SBOM artifact for each scan run.
+
+Beyond plain unit and integration tests, the suite uses property-based tests,
+native fuzzing, reference-vector tests for the cycle math, and mutation testing to
+verify the tests themselves catch real bugs. See **[TESTING.md](TESTING.md)** for
+the full quality and security approach.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+For bugs and feature requests, open a GitHub issue:
+- https://github.com/ovumcy/ovumcy-web/issues
+
+## Releases
+
+- Latest tagged release: `v1.3.0`.
+- Publish release notes via GitHub Releases and keep [CHANGELOG.md](CHANGELOG.md) updated.
+
+## Roadmap
+
+Product planning lives in GitHub Issues and the `Ovumcy Roadmap` project board.
+This README intentionally focuses on functionality that exists today rather than future or commercial roadmap items.
+
+## License
+
+Ovumcy is licensed under AGPL v3.
+See [LICENSE](LICENSE).

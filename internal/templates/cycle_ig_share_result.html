@@ -1,0 +1,77 @@
+{{define "cycle_ig_share_result"}}
+{{if eq .CycleIGMode "error"}}
+<div class="status-error" data-cycle-ig-result="error">
+  <span>{{.CycleIGError}}</span>
+</div>
+{{else if eq .CycleIGMode "preview"}}
+<div class="journal-panel space-y-3" data-cycle-ig-result="preview">
+  <div>
+    <h3 class="field-label">SMART Link preview</h3>
+    <p class="journal-muted text-sm">This snapshot uses the current date range and category choices. Anyone with the link can open it until you stop sharing, it expires, or 5 opens are used.</p>
+  </div>
+  {{template "cycle_ig_summary" .CycleIGSummary}}
+  <p class="journal-muted text-xs">Excluded: predictions, derived cycle summaries, sex activity, pregnancy tests, account identity, and missing days.</p>
+</div>
+{{else if eq .CycleIGMode "share"}}
+<div class="journal-panel space-y-4" data-cycle-ig-result="share" data-cycle-ig-share-card>
+  <div>
+    <div class="flex items-center gap-2">
+      <img src="/static/brand/smart-logo-mark.svg" alt="" class="h-5 w-auto" loading="lazy">
+      <h3 class="field-label">Active SMART Link</h3>
+    </div>
+    <p class="journal-muted text-sm">The QR, copy, share, and open controls use the same encrypted SMART Health Link. It expires after 7 days, stops after 5 opens, or stops immediately when revoked.</p>
+  </div>
+  <div class="grid gap-4 md:grid-cols-[auto_minmax(0,1fr)] md:items-start">
+    <img src="{{.CycleIGQRDataURL}}" alt="SMART Link QR code" class="cycle-ig-qr">
+    <div class="space-y-3 min-w-0">
+      {{template "cycle_ig_summary" .CycleIGShare.Summary}}
+      <label class="field-label" for="cycle-ig-viewer-link">SMART Link viewer URL</label>
+      <input id="cycle-ig-viewer-link" class="input-field text-sm" type="text" readonly value="{{.CycleIGShare.ViewerLink}}" data-cycle-ig-link>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn-secondary" data-cycle-ig-copy>Copy</button>
+        <button type="button" class="btn-secondary" data-cycle-ig-native-share>Share</button>
+        <a class="btn-secondary" href="{{.CycleIGShare.ViewerLink}}" target="_blank" rel="noopener noreferrer">Open</a>
+      </div>
+      <p class="journal-muted text-xs break-all">Host file URL: {{.CycleIGShare.FileURL}}</p>
+      <p class="journal-muted text-xs">The decryption key is in the link fragment after <code>#shlink:/</code>; shlep receives only the ciphertext URL request.</p>
+      <p class="save-status text-sm" data-cycle-ig-action-status aria-live="polite"></p>
+    </div>
+  </div>
+  <form
+    method="post"
+    hx-post="/api/v1/cycle-ig/shares/{{.CycleIGShare.ID}}/revoke"
+    hx-target="#cycle-ig-result"
+    hx-swap="innerHTML"
+    class="flex flex-wrap items-center gap-2">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <input type="hidden" name="manage_token" value="{{.CycleIGShare.ManageToken}}">
+    <button type="submit" class="btn-secondary">Stop sharing</button>
+    <span class="journal-muted text-xs">This revokes the live QR/link on shlep.</span>
+  </form>
+</div>
+{{else if eq .CycleIGMode "stopped"}}
+<div class="status-ok" data-cycle-ig-result="stopped">
+  <span>Sharing stopped. The previous QR/link now returns 404.</span>
+</div>
+{{else}}
+<div class="journal-panel space-y-2" data-cycle-ig-result="empty">
+  <p class="journal-muted text-sm">Review a scoped snapshot or create a live encrypted SMART Link QR.</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "cycle_ig_summary"}}
+<dl class="cycle-ig-summary-grid">
+  <div><dt>Rows</dt><dd>{{.SourceLogCount}}</dd></div>
+  <div><dt>Observations</dt><dd>{{.ObservationCount}}</dd></div>
+  <div><dt>Range</dt><dd>{{if .DateFrom}}{{.DateFrom}} to {{.DateTo}}{{else}}-{{end}}</dd></div>
+  <div><dt>Bleeding</dt><dd>{{.BleedingTrue}} true / {{.BleedingFalse}} false</dd></div>
+  <div><dt>Flow</dt><dd>{{.FlowFacts}}</dd></div>
+  <div><dt>Symptoms</dt><dd>{{.SymptomFacts}}</dd></div>
+  <div><dt>BBT</dt><dd>{{.BBTFacts}}</dd></div>
+  <div><dt>Mucus</dt><dd>{{.MucusFacts}}</dd></div>
+  <div><dt>Mood</dt><dd>{{.MoodFacts}}</dd></div>
+  <div><dt>Factors</dt><dd>{{.CycleFactorFacts}}</dd></div>
+  <div><dt>Notes</dt><dd>{{.NoteFacts}}</dd></div>
+</dl>
+{{end}}

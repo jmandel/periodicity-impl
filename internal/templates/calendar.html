@@ -1,0 +1,142 @@
+{{define "content"}}
+<section class="space-y-6">
+  <div class="journal-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+    <div>
+      <h1 class="journal-subtitle">{{t .Messages "calendar.title"}}</h1>
+      <p class="journal-muted mt-1">{{.MonthLabel}}</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      {{if .PrevMonth}}
+      <a href="/calendar?month={{.PrevMonth}}" class="btn-secondary">{{t .Messages "calendar.prev"}}</a>
+      {{else}}
+      <span class="btn-secondary btn--disabled" aria-disabled="true">{{t .Messages "calendar.prev"}}</span>
+      {{end}}
+      <a href="/calendar?month={{.NextMonth}}" class="btn-secondary">{{t .Messages "calendar.next"}}</a>
+      <a href="/calendar" class="btn-primary">{{t .Messages "calendar.today"}}</a>
+    </div>
+  </div>
+
+  <div
+    class="grid gap-6 lg:grid-cols-[2fr_1fr]"
+    data-calendar-view
+    data-usage-goal="{{.CurrentUser.UsageGoal}}"
+    data-selected-date="{{.SelectedDate}}">
+    <div
+      id="calendar-grid-refresh"
+      hx-get="/calendar?month={{.MonthValue}}"
+      hx-trigger="calendar-day-updated from:body"
+      hx-select="#calendar-grid-panel"
+      hx-target="#calendar-grid-panel"
+      hx-swap="outerHTML"
+      class="hidden"></div>
+
+    <section
+      id="calendar-grid-panel"
+      class="journal-card p-4 sm:p-5">
+      <div class="mb-3 grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide journal-muted">
+        <span>{{t .Messages "calendar.weekday.sun"}}</span>
+        <span>{{t .Messages "calendar.weekday.mon"}}</span>
+        <span>{{t .Messages "calendar.weekday.tue"}}</span>
+        <span>{{t .Messages "calendar.weekday.wed"}}</span>
+        <span>{{t .Messages "calendar.weekday.thu"}}</span>
+        <span>{{t .Messages "calendar.weekday.fri"}}</span>
+        <span>{{t .Messages "calendar.weekday.sat"}}</span>
+      </div>
+
+      <div class="grid grid-cols-7 gap-2">
+        {{range .CalendarDays}}
+        <div class="relative">
+          <button
+            type="button"
+            hx-get="/calendar/day/{{.DateString}}{{if .OpenEditDirectly}}?mode=edit{{end}}"
+            hx-target="#day-editor"
+            hx-swap="innerHTML"
+            data-day="{{.DateString}}"
+            data-calendar-state="{{.StateKey}}"
+            data-calendar-has-data="{{if .HasData}}true{{else}}false{{end}}"
+            data-calendar-has-sex="{{if .HasSex}}true{{else}}false{{end}}"
+            aria-label="{{formatLocalizedDate $.Lang .Date "display"}}"
+            class="{{.CellClass}}{{if eq .DateString $.SelectedDate}} selected{{end}}">
+            <div class="calendar-cell-header">
+              <span class="{{.TextClass}}">{{.Day}}</span>
+              {{if .IsToday}}
+              <span class="calendar-today-pill" title="{{t $.Messages "calendar.tag.today"}}">
+                <span class="calendar-tag-label-full">{{t $.Messages "calendar.tag.today"}}</span>
+                <span class="calendar-tag-label-short">{{t $.Messages "calendar.tag.today_short"}}</span>
+              </span>
+              {{end}}
+            </div>
+
+            <div class="calendar-cell-markers">
+              {{if .HasData}}
+              <span class="calendar-data-marker" title="{{t $.Messages "calendar.data_logged"}}"></span>
+              {{end}}
+              {{if .OvulationDot}}
+              <span class="calendar-ovulation-dot" title="{{t $.Messages "calendar.ovulation_icon"}}"></span>
+              {{end}}
+              {{if .TentativeOvulationMark}}
+              <span class="calendar-ovulation-dash" title="{{t $.Messages "calendar.ovulation_tentative"}}"></span>
+              {{end}}
+              {{if .HasSex}}
+              <span class="calendar-sex-marker" title="{{t $.Messages "calendar.sex_logged"}}">♥</span>
+              {{end}}
+            </div>
+          </button>
+
+        </div>
+        {{end}}
+      </div>
+
+      {{if or .HasPredictionExplanationPrimary .HasPredictionExplanationSecondary}}
+      <div class="mt-4 space-y-2" data-calendar-prediction-explainer data-explainer-primary-key="{{.PredictionExplanationPrimaryKey}}" data-explainer-secondary-key="{{.PredictionExplanationSecondaryKey}}">
+        {{if .HasPredictionExplanationPrimary}}
+        <p class="journal-muted text-sm">{{t .Messages .PredictionExplanationPrimaryKey}}</p>
+        {{end}}
+        {{if .HasPredictionExplanationSecondary}}
+        <p class="journal-muted text-sm">{{t .Messages .PredictionExplanationSecondaryKey}}</p>
+        {{end}}
+      </div>
+      {{end}}
+
+      <div class="calendar-legend mobile-safe-target mt-4 flex flex-wrap items-center gap-3 text-xs journal-muted">
+        <span class="legend-item"><span class="legend-dot legend-dot-period"></span>{{t .Messages "calendar.legend.actual_period"}}</span>
+        {{if not .CurrentUser.UnpredictableCycle}}
+        <span class="legend-item"><span class="legend-dot legend-dot-predicted"></span>{{t .Messages "calendar.legend.predicted_period"}}</span>
+        <span class="legend-item"><span class="legend-outline"></span>{{t .Messages "calendar.legend.low_probability"}}</span>
+        <span class="legend-item"><span class="legend-dot legend-dot-fertile-edge"></span>{{t .Messages "calendar.legend.fertility_edge"}}</span>
+        <span class="legend-item"><span class="legend-dot legend-dot-fertile-peak"></span>{{t .Messages "calendar.legend.fertility_peak"}}</span>
+        <span class="legend-item"><span class="calendar-ovulation-dot"></span>{{t .Messages "calendar.legend.ovulation"}}</span>
+        <span class="legend-item"><span class="calendar-ovulation-dash"></span>{{t .Messages "calendar.legend.ovulation_tentative"}}</span>
+        {{end}}
+        <span class="legend-item"><span class="calendar-data-marker"></span>{{t .Messages "calendar.legend.logged_entry"}}</span>
+        <span class="legend-item"><span class="calendar-sex-marker">♥</span>{{t .Messages "calendar.sex_logged"}}</span>
+      </div>
+    </section>
+
+    <aside id="day-editor" class="journal-card p-4 sm:p-5">
+      {{if .SelectedDate}}
+      <div
+        hx-get="/calendar/day/{{.SelectedDate}}{{if .SelectedDateEditMode}}?mode=edit{{end}}"
+        hx-trigger="load"
+        hx-target="#day-editor"
+        hx-swap="innerHTML">
+        <div class="calendar-day-skeleton" aria-hidden="true">
+          <div class="calendar-day-skeleton-line"></div>
+          <div class="calendar-day-skeleton-line calendar-day-skeleton-line-short"></div>
+          <div class="calendar-day-skeleton-chip-row">
+            <span class="calendar-day-skeleton-chip"></span>
+            <span class="calendar-day-skeleton-chip"></span>
+            <span class="calendar-day-skeleton-chip"></span>
+          </div>
+        </div>
+        <p class="journal-muted">{{t .Messages "calendar.loading_day"}}</p>
+      </div>
+      {{else}}
+      <p class="journal-muted">{{t .Messages "calendar.select_day"}}</p>
+      {{end}}
+    </aside>
+  </div>
+</section>
+
+{{end}}

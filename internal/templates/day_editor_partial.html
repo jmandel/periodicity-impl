@@ -1,0 +1,273 @@
+{{define "day_editor_partial"}}
+<div class="space-y-4">
+  <div>
+    <h3 class="journal-subtitle">{{.DateLabel}}</h3>
+    <p class="journal-muted text-xs">{{t .Messages "daylog.title"}}</p>
+  </div>
+
+  {{if .IsFutureDate}}
+  <div class="journal-panel text-sm">{{t .Messages "warning.future_date"}}</div>
+  {{end}}
+
+  {{if and .IsOwner .EditMode}}
+  <form
+    hx-put="/api/v1/days/{{.DateString}}"
+    hx-target="#calendar-save-status"
+    hx-swap="innerHTML"
+    class="space-y-5 calendar-day-editor-form"
+    data-save-feedback
+    data-day-editor-form
+    data-day-editor-date="{{.DateString}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <input type="hidden" name="ack_period_tip" value="false" data-period-tip-ack>
+
+    <label class="period-toggle" data-binary-toggle data-active="{{if .Log.IsPeriod}}true{{else}}false{{end}}">
+      <input type="checkbox" name="is_period" value="true" data-period-toggle data-binary-toggle-input {{if .Log.IsPeriod}}checked{{end}}>
+      <span class="period-toggle-copy">
+        <span
+          class="period-toggle-main"
+          data-period-toggle-label
+          data-period-label-on="{{t .Messages "dashboard.period_day"}}"
+          data-period-label-off="{{t .Messages "dashboard.period_day"}}">🩸 {{t .Messages "dashboard.period_day"}}</span>
+      </span>
+    </label>
+
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.symptoms"}}</legend>
+      {{template "symptom_options" (dict "Messages" .Messages "PrimarySymptoms" .PrimarySymptoms "ExtraSymptoms" .ExtraSymptoms "HasExtraSymptoms" .HasExtraSymptoms "SelectedSymptomID" .SelectedSymptomID "Lang" .Lang "Compact" true "IncludePreviewHooks" false)}}
+    </fieldset>
+
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.mood"}}</legend>
+      {{template "mood_picker" (dict "SelectedMood" .Log.Mood "Compact" true)}}
+    </fieldset>
+
+    {{if .ShowCycleFactors}}
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.cycle_factors"}}</legend>
+      <p class="journal-muted text-sm">{{t .Messages "dashboard.cycle_factors_hint"}}</p>
+      {{template "cycle_factor_options" (dict "Messages" .Messages "CycleFactorKeys" .CycleFactorKeys "SelectedCycleFactorKey" .SelectedCycleFactorKey "Compact" true)}}
+    </fieldset>
+    {{end}}
+
+    <fieldset class="space-y-2" data-period-fields {{if not .Log.IsPeriod}}hidden{{end}}>
+      <legend class="field-label">{{t .Messages "dashboard.flow"}}</legend>
+      {{template "period_flow_options" (dict "Messages" .Messages "SelectedFlow" .Log.Flow "Compact" true "DisableWhenNotPeriod" true "CurrentIsPeriod" .Log.IsPeriod)}}
+      {{if .ShowSpottingCycleWarning}}
+      <p class="journal-muted text-sm">{{t .Messages "dashboard.spotting_cycle_warning"}}</p>
+      {{end}}
+    </fieldset>
+
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.intimacy"}}</legend>
+      {{if .ShowSexChip}}
+      <div class="pt-2">
+        {{template "sex_activity_field" (dict "Messages" .Messages "SelectedSexActivity" .Log.SexActivity "Compact" true)}}
+      </div>
+      {{else}}
+      <p class="journal-muted text-sm">{{t .Messages "dashboard.intimacy_hidden_hint"}}</p>
+      {{end}}
+    </fieldset>
+
+    {{if .ShowBBTField}}
+    {{template "temperature_input_field" (dict
+      "Messages" .Messages
+      "FieldID" "calendar-bbt"
+      "Value" (displayBBT .Log.BBT .TemperatureUnit)
+      "TemperatureUnit" .TemperatureUnit
+      "TemperatureInputMin" .TemperatureInputMin
+      "TemperatureInputMax" .TemperatureInputMax
+      "TemperatureRangeError" .TemperatureRangeError
+      "TemperatureUnitSymbol" .TemperatureUnitSymbol
+      "TemperatureRangeHint" .TemperatureRangeHint)}}
+    {{end}}
+
+    {{if .ShowCervicalMucus}}
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.cervical_mucus"}}</legend>
+      <p class="dashboard-once-tip journal-muted text-sm" data-once-tip="cervical-mucus-explainer" hidden>{{t .Messages "dashboard.cervical_mucus_explainer"}}</p>
+      {{template "cervical_mucus_options" (dict "Messages" .Messages "SelectedCervicalMucus" .Log.CervicalMucus "Compact" true)}}
+    </fieldset>
+    {{end}}
+
+    <fieldset class="space-y-2">
+      <legend class="field-label">{{t .Messages "dashboard.pregnancy_test"}}</legend>
+      {{template "pregnancy_test_options" (dict "Messages" .Messages "SelectedPregnancyTest" .Log.PregnancyTest "Compact" true)}}
+    </fieldset>
+
+    {{if .ShowNotesField}}
+    <details
+      class="note-disclosure"
+      data-note-disclosure
+      data-note-open-text="{{t .Messages "dashboard.hide_note"}}"
+      data-note-empty-text="{{t .Messages "dashboard.add_note"}}"
+      data-note-filled-text="{{t .Messages "dashboard.edit_note"}}"
+      {{if ne .Log.Notes ""}}open{{end}}>
+      <summary class="symptom-more-summary">
+        <span class="symptom-more-label" data-note-disclosure-label>{{if ne .Log.Notes ""}}{{t .Messages "dashboard.hide_note"}}{{else}}{{t .Messages "dashboard.add_note"}}{{end}}</span>
+      </summary>
+      <div class="mt-3 space-y-2" data-dashboard-notes-field-group>
+        <label class="field-label" for="calendar-notes">{{t .Messages "dashboard.notes"}}</label>
+        <textarea id="calendar-notes" name="notes" rows="2" maxlength="2000" class="textarea-field dashboard-notes-field" placeholder="{{t .Messages "dashboard.notes_placeholder"}}" data-dashboard-notes>{{.Log.Notes}}</textarea>
+        <p class="journal-muted text-xs" data-dashboard-notes-count></p>
+      </div>
+    </details>
+    {{end}}
+
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="submit" class="btn-primary" data-save-button data-saving-label="{{t .Messages "common.saving"}}">{{if gt .Log.ID 0}}{{t .Messages "dashboard.update_entry"}}{{else}}{{t .Messages "dashboard.save_day"}}{{end}}</button>
+      <button type="button" class="btn-secondary" hx-get="/calendar/day/{{.DateString}}" hx-target="#day-editor" hx-swap="innerHTML" data-day-editor-cancel>{{t .Messages "common.cancel"}}</button>
+      <div id="calendar-save-status" class="save-status text-sm" aria-live="polite"></div>
+    </div>
+  </form>
+
+  {{if .AllowManualCycleStart}}
+  <form
+    hx-post="/api/v1/days/{{.DateString}}/cycle-start?source=calendar"
+    hx-target="#calendar-save-status"
+    hx-swap="innerHTML"
+    class="pt-3"
+    data-cycle-start-confirm-form
+    data-day-cycle-start-form
+    data-day-cycle-start-date="{{.DateString}}">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <input type="hidden" name="ack_period_tip" value="false" data-period-tip-ack>
+    <input type="hidden" name="replace_existing" value="false" data-cycle-start-replace-input>
+    <input type="hidden" name="mark_uncertain" value="false" data-cycle-start-uncertain-input>
+    <button type="submit" class="{{if .Log.CycleStart}}btn-primary{{else}}btn-secondary{{end}}" data-day-cycle-start-button>{{t .Messages "dashboard.manual_cycle_start"}}</button>
+  </form>
+  <div
+    hidden
+    data-cycle-start-policy
+    data-cycle-start-conflict="{{if .ManualCycleStartConflict}}true{{else}}false{{end}}"
+    data-cycle-start-conflict-date="{{if .ManualCycleStartConflict}}{{formatLocalizedDate .Lang .ManualCycleStartConflictDate "display"}}{{end}}"
+    data-cycle-start-target-date="{{formatLocalizedDate .Lang .Date "display"}}"
+    data-cycle-start-short-gap="{{.ManualCycleStartShortGap}}"
+    data-cycle-start-previous-date="{{if gt .ManualCycleStartShortGap 0}}{{formatLocalizedDate .Lang .ManualCycleStartPreviousDate "display"}}{{end}}"
+    data-cycle-start-implantation="{{if .ManualCycleStartPotentialImplantation}}true{{else}}false{{end}}"
+    data-cycle-start-replace-message="{{t .Messages "dashboard.cycle_start_replace_message"}}"
+    data-cycle-start-replace-accept="{{t .Messages "dashboard.cycle_start_replace_accept"}}"
+    data-cycle-start-short-gap-message="{{t .Messages "dashboard.cycle_start_short_gap_message"}}"
+    data-cycle-start-short-gap-accept="{{t .Messages "dashboard.cycle_start_short_gap_accept"}}"></div>
+  {{if .ShowFutureCycleStartNotice}}
+  <p class="journal-muted text-sm">{{t .Messages "warning.future_cycle_start"}}</p>
+  {{end}}
+  {{if .ShowCycleStartSuggestion}}
+  <p class="journal-muted text-sm">{{t .Messages "dashboard.cycle_start_suggestion"}}</p>
+  {{end}}
+  {{if .ManualCycleStartPotentialImplantation}}
+  <p class="journal-muted text-sm">{{t .Messages "dashboard.implantation_warning"}}</p>
+  {{end}}
+  {{end}}
+
+  {{if .HasDayData}}
+  <div class="panel-danger-zone">
+    <form
+      hx-delete="/api/v1/days?date={{.DateString}}&source=calendar"
+      hx-target="#day-editor"
+      hx-swap="innerHTML"
+      data-confirm="{{t .Messages "confirm.delete_entry"}}"
+      data-confirm-accept="{{t .Messages "confirm.yes"}}"
+      data-day-delete-form
+      data-day-delete-date="{{.DateString}}">
+      <button type="submit" class="danger-link" data-day-delete-button>{{t .Messages "calendar.delete_entry"}}</button>
+    </form>
+  </div>
+  {{end}}
+  {{else if .IsOwner}}
+    {{if .HasDayData}}
+    {{template "owner_log_summary" (dict "Messages" .Messages "Log" .Log "Symptoms" .Symptoms "SelectedSymptomID" .SelectedSymptomID "NoDataLabel" .NoDataLabel "TemperatureUnit" .TemperatureUnit)}}
+    <div class="flex flex-wrap items-center gap-3">
+      <button type="button" class="btn-secondary" hx-get="/calendar/day/{{.DateString}}?mode=edit" hx-target="#day-editor" hx-swap="innerHTML" data-day-editor-open="{{.DateString}}">{{t .Messages "calendar.edit_entry"}}</button>
+      {{if .AllowManualCycleStart}}
+      <form
+        hx-post="/api/v1/days/{{.DateString}}/cycle-start?source=calendar"
+        hx-target="#day-editor"
+        hx-swap="innerHTML"
+        data-cycle-start-confirm-form
+        data-day-cycle-start-form
+        data-day-cycle-start-date="{{.DateString}}">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="ack_period_tip" value="false" data-period-tip-ack>
+        <input type="hidden" name="replace_existing" value="false" data-cycle-start-replace-input>
+        <input type="hidden" name="mark_uncertain" value="false" data-cycle-start-uncertain-input>
+        <button type="submit" class="{{if .Log.CycleStart}}btn-primary{{else}}btn-secondary{{end}}" data-day-cycle-start-button>{{t .Messages "dashboard.manual_cycle_start"}}</button>
+      </form>
+      {{end}}
+    </div>
+    {{if .AllowManualCycleStart}}
+    <div
+      hidden
+      data-cycle-start-policy
+      data-cycle-start-conflict="{{if .ManualCycleStartConflict}}true{{else}}false{{end}}"
+      data-cycle-start-conflict-date="{{if .ManualCycleStartConflict}}{{formatLocalizedDate .Lang .ManualCycleStartConflictDate "display"}}{{end}}"
+      data-cycle-start-target-date="{{formatLocalizedDate .Lang .Date "display"}}"
+      data-cycle-start-short-gap="{{.ManualCycleStartShortGap}}"
+      data-cycle-start-previous-date="{{if gt .ManualCycleStartShortGap 0}}{{formatLocalizedDate .Lang .ManualCycleStartPreviousDate "display"}}{{end}}"
+      data-cycle-start-implantation="{{if .ManualCycleStartPotentialImplantation}}true{{else}}false{{end}}"
+      data-cycle-start-replace-message="{{t .Messages "dashboard.cycle_start_replace_message"}}"
+      data-cycle-start-replace-accept="{{t .Messages "dashboard.cycle_start_replace_accept"}}"
+      data-cycle-start-short-gap-message="{{t .Messages "dashboard.cycle_start_short_gap_message"}}"
+      data-cycle-start-short-gap-accept="{{t .Messages "dashboard.cycle_start_short_gap_accept"}}"></div>
+    {{end}}
+    {{if .ShowFutureCycleStartNotice}}
+    <p class="journal-muted text-sm">{{t .Messages "warning.future_cycle_start"}}</p>
+    {{end}}
+    {{if .ShowCycleStartSuggestion}}
+    <p class="journal-muted text-sm">{{t .Messages "dashboard.cycle_start_suggestion"}}</p>
+    {{end}}
+    {{if .ManualCycleStartPotentialImplantation}}
+    <p class="journal-muted text-sm">{{t .Messages "dashboard.implantation_warning"}}</p>
+    {{end}}
+    {{else}}
+    <div class="journal-panel space-y-3 text-sm">
+      <p>{{t .Messages "calendar.no_entry"}}</p>
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" class="btn-primary" hx-get="/calendar/day/{{.DateString}}?mode=edit" hx-target="#day-editor" hx-swap="innerHTML" data-day-editor-open="{{.DateString}}">{{t .Messages "calendar.add_entry"}}</button>
+        {{if .AllowManualCycleStart}}
+        <form
+          hx-post="/api/v1/days/{{.DateString}}/cycle-start?source=calendar"
+          hx-target="#day-editor"
+          hx-swap="innerHTML"
+          data-cycle-start-confirm-form
+          data-day-cycle-start-form
+          data-day-cycle-start-date="{{.DateString}}">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <input type="hidden" name="ack_period_tip" value="false" data-period-tip-ack>
+          <input type="hidden" name="replace_existing" value="false" data-cycle-start-replace-input>
+          <input type="hidden" name="mark_uncertain" value="false" data-cycle-start-uncertain-input>
+          <button type="submit" class="btn-secondary" data-day-cycle-start-button>{{t .Messages "dashboard.manual_cycle_start"}}</button>
+        </form>
+        {{end}}
+      </div>
+      {{if .AllowManualCycleStart}}
+      <div
+        hidden
+        data-cycle-start-policy
+        data-cycle-start-conflict="{{if .ManualCycleStartConflict}}true{{else}}false{{end}}"
+        data-cycle-start-conflict-date="{{if .ManualCycleStartConflict}}{{formatLocalizedDate .Lang .ManualCycleStartConflictDate "display"}}{{end}}"
+        data-cycle-start-target-date="{{formatLocalizedDate .Lang .Date "display"}}"
+        data-cycle-start-short-gap="{{.ManualCycleStartShortGap}}"
+        data-cycle-start-previous-date="{{if gt .ManualCycleStartShortGap 0}}{{formatLocalizedDate .Lang .ManualCycleStartPreviousDate "display"}}{{end}}"
+        data-cycle-start-implantation="{{if .ManualCycleStartPotentialImplantation}}true{{else}}false{{end}}"
+        data-cycle-start-replace-message="{{t .Messages "dashboard.cycle_start_replace_message"}}"
+        data-cycle-start-replace-accept="{{t .Messages "dashboard.cycle_start_replace_accept"}}"
+        data-cycle-start-short-gap-message="{{t .Messages "dashboard.cycle_start_short_gap_message"}}"
+        data-cycle-start-short-gap-accept="{{t .Messages "dashboard.cycle_start_short_gap_accept"}}"></div>
+      {{end}}
+      {{if .ShowFutureCycleStartNotice}}
+      <p class="journal-muted text-sm">{{t .Messages "warning.future_cycle_start"}}</p>
+      {{end}}
+      {{if .ShowCycleStartSuggestion}}
+      <p class="journal-muted text-sm">{{t .Messages "dashboard.cycle_start_suggestion"}}</p>
+      {{end}}
+      {{if .ManualCycleStartPotentialImplantation}}
+      <p class="journal-muted text-sm">{{t .Messages "dashboard.implantation_warning"}}</p>
+      {{end}}
+    </div>
+    {{end}}
+  {{else}}
+  {{template "readonly_log_summary" (dict "Messages" .Messages "Log" .Log "NoDataLabel" .NoDataLabel "TemperatureUnit" .TemperatureUnit)}}
+  {{end}}
+</div>
+{{end}}

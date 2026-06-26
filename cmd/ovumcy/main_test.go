@@ -1,0 +1,1635 @@
+package main
+
+import (
+	"bytes"
+	"errors"
+	"log"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/csrf"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/ovumcy/ovumcy-web/internal/db"
+	"github.com/ovumcy/ovumcy-web/internal/security"
+	"github.com/ovumcy/ovumcy-web/internal/services"
+	"gorm.io/gorm"
+)
+
+func TestResolveSecretKey(t *testing.T) {
+	valid := "0123456789abcdef0123456789abcdef"
+	t.Run("requires a secret source", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", "")
+		assertResolveSecretKeyError(t, "SECRET_KEY is required")
+	})
+
+	t.Run("rejects insecure placeholder values from environment", func(t *testing.T) {
+		t.Setenv("SECRET_KEY_FILE", "")
+		t.Setenv("SECRET_KEY", "change_me_in_production")
+		assertResolveSecretKeyError(t, "placeholder value")
+
+		t.Setenv("SECRET_KEY", "replace_with_at_least_32_random_characters")
+		assertResolveSecretKeyError(t, "placeholder value")
+	})
+
+	t.Run("rejects short environment secrets", func(t *testing.T) {
+		t.Setenv("SECRET_KEY_FILE", "")
+		t.Setenv("SECRET_KEY", "too-short-secret")
+		assertResolveSecretKeyError(t, "at least 32 characters")
+	})
+
+	t.Run("accepts a valid environment secret", func(t *testing.T) {
+		t.Setenv("SECRET_KEY_FILE", "")
+		t.Setenv("SECRET_KEY", valid)
+
+		secret, err := resolveSecretKey()
+		if err != nil {
+			t.Fatalf("expected valid secret, got error: %v", err)
+		}
+		if secret != valid {
+			t.Fatalf("expected %q, got %q", valid, secret)
+		}
+	})
+
+	t.Run("reads and trims SECRET_KEY_FILE", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", writeSecretKeyFile(t, valid+"\n"))
+
+		secret, err := resolveSecretKey()
+		if err != nil {
+			t.Fatalf("expected valid secret from file, got error: %v", err)
+		}
+		if secret != valid {
+			t.Fatalf("expected %q from file, got %q", valid, secret)
+		}
+	})
+
+	t.Run("SECRET_KEY takes precedence over SECRET_KEY_FILE", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", valid)
+		t.Setenv("SECRET_KEY_FILE", filepath.Join(t.TempDir(), "missing-secret.txt"))
+
+		secret, err := resolveSecretKey()
+		if err != nil {
+			t.Fatalf("expected env secret to win, got error: %v", err)
+		}
+		if secret != valid {
+			t.Fatalf("expected %q from env, got %q", valid, secret)
+		}
+	})
+
+	t.Run("fails when SECRET_KEY_FILE cannot be read", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		missingPath := filepath.Join(t.TempDir(), "missing-secret.txt")
+		t.Setenv("SECRET_KEY_FILE", missingPath)
+		assertResolveSecretKeyError(t, "failed to read SECRET_KEY_FILE")
+		assertResolveSecretKeyError(t, missingPath)
+	})
+
+	t.Run("rejects directory SECRET_KEY_FILE paths", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", t.TempDir())
+		assertResolveSecretKeyError(t, "regular file")
+	})
+
+	t.Run("rejects oversized SECRET_KEY_FILE values", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", writeSecretKeyFile(t, strings.Repeat("a", int(maxSecretKeyFileBytes)+1)))
+		assertResolveSecretKeyError(t, "at most")
+	})
+
+	t.Run("rejects whitespace-only SECRET_KEY_FILE values", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", writeSecretKeyFile(t, " \n\t "))
+		assertResolveSecretKeyError(t, "SECRET_KEY is required")
+	})
+
+	t.Run("rejects insecure placeholder values from SECRET_KEY_FILE", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", writeSecretKeyFile(t, "change_me_in_production\n"))
+		assertResolveSecretKeyError(t, "placeholder value")
+	})
+
+	t.Run("rejects short SECRET_KEY_FILE values", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", "")
+		t.Setenv("SECRET_KEY_FILE", writeSecretKeyFile(t, "too-short-secret\n"))
+		assertResolveSecretKeyError(t, "at least 32 characters")
+	})
+}
+
+func assertResolveSecretKeyError(t *testing.T, expectedSubstring string) {
+	t.Helper()
+
+	_, err := resolveSecretKey()
+	if err == nil {
+		t.Fatalf("expected error containing %q", expectedSubstring)
+	}
+	if !strings.Contains(err.Error(), expectedSubstring) {
+		t.Fatalf("expected error containing %q, got %v", expectedSubstring, err)
+	}
+}
+
+func writeSecretKeyFile(t *testing.T, contents string) string {
+	t.Helper()
+
+	filePath := filepath.Join(t.TempDir(), "secret_key.txt")
+	if err := os.WriteFile(filePath, []byte(contents), 0o600); err != nil {
+		t.Fatalf("failed to write secret key file: %v", err)
+	}
+	return filePath
+}
+
+func TestResolveDatabaseConfigDefaultsToSQLite(t *testing.T) {
+	t.Setenv("DB_DRIVER", "")
+	t.Setenv("DB_PATH", "")
+	t.Setenv("DATABASE_URL", "")
+
+	config, err := resolveDatabaseConfig()
+	if err != nil {
+		t.Fatalf("expected default sqlite config, got error: %v", err)
+	}
+	if config.Driver != "sqlite" {
+		t.Fatalf("expected sqlite driver, got %q", config.Driver)
+	}
+	if config.SQLitePath != "data\\ovumcy.db" && config.SQLitePath != "data/ovumcy.db" {
+		t.Fatalf("expected default sqlite path, got %q", config.SQLitePath)
+	}
+}
+
+func TestResolveDatabaseConfigRequiresDatabaseURLForPostgres(t *testing.T) {
+	t.Setenv("DB_DRIVER", "postgres")
+	t.Setenv("DATABASE_URL", "")
+
+	if _, err := resolveDatabaseConfig(); err == nil {
+		t.Fatal("expected postgres config without DATABASE_URL to fail")
+	}
+}
+
+func TestResolveDatabaseConfigAcceptsPostgres(t *testing.T) {
+	t.Setenv("DB_DRIVER", "postgres")
+	t.Setenv("DATABASE_URL", "host=127.0.0.1 port=5432 user=ovumcy password=ovumcy dbname=ovumcy sslmode=disable")
+
+	config, err := resolveDatabaseConfig()
+	if err != nil {
+		t.Fatalf("expected postgres config, got error: %v", err)
+	}
+	if config.Driver != "postgres" {
+		t.Fatalf("expected postgres driver, got %q", config.Driver)
+	}
+	if config.PostgresURL == "" {
+		t.Fatal("expected postgres url to be preserved")
+	}
+}
+
+func TestCSRFMiddlewareConfigUsesCookieSecureFlag(t *testing.T) {
+	handler := newRateLimitTestHandler(t)
+	secureConfig := csrfMiddlewareConfig(true, handler)
+	if !secureConfig.CookieSecure {
+		t.Fatal("expected csrf cookie secure flag to be enabled")
+	}
+	if !secureConfig.CookieHTTPOnly {
+		t.Fatal("expected csrf cookie to be httpOnly")
+	}
+	if secureConfig.CookieName != "ovumcy_csrf" {
+		t.Fatalf("expected csrf cookie name ovumcy_csrf, got %q", secureConfig.CookieName)
+	}
+	if secureConfig.KeyLookup != "form:csrf_token" {
+		t.Fatalf("expected csrf key lookup form:csrf_token, got %q", secureConfig.KeyLookup)
+	}
+
+	insecureConfig := csrfMiddlewareConfig(false, handler)
+	if insecureConfig.CookieSecure {
+		t.Fatal("expected csrf cookie secure flag to be disabled")
+	}
+}
+
+func TestResolvePort(t *testing.T) {
+	t.Setenv("PORT", "")
+	port, err := resolvePort()
+	if err != nil {
+		t.Fatalf("expected default port, got error: %v", err)
+	}
+	if port != "8080" {
+		t.Fatalf("expected default port 8080, got %q", port)
+	}
+
+	t.Setenv("PORT", "9090")
+	port, err = resolvePort()
+	if err != nil {
+		t.Fatalf("expected valid port, got error: %v", err)
+	}
+	if port != "9090" {
+		t.Fatalf("expected port 9090, got %q", port)
+	}
+
+	t.Setenv("PORT", "0")
+	if _, err := resolvePort(); err == nil {
+		t.Fatal("expected invalid port 0 to fail")
+	}
+
+	t.Setenv("PORT", "70000")
+	if _, err := resolvePort(); err == nil {
+		t.Fatal("expected invalid high port to fail")
+	}
+
+	t.Setenv("PORT", "not-a-number")
+	if _, err := resolvePort(); err == nil {
+		t.Fatal("expected invalid non-numeric port to fail")
+	}
+}
+
+func TestResolveProxySettingsDefaultsWhenDisabled(t *testing.T) {
+	t.Setenv("TRUST_PROXY_ENABLED", "")
+	t.Setenv("PROXY_HEADER", "")
+	t.Setenv("TRUSTED_PROXIES", "")
+
+	settings, err := resolveProxySettings()
+	if err != nil {
+		t.Fatalf("expected disabled proxy settings, got error: %v", err)
+	}
+	if settings.Enabled {
+		t.Fatal("expected proxy settings to be disabled by default")
+	}
+	if settings.Header != fiber.HeaderXForwardedFor {
+		t.Fatalf("expected default proxy header %q, got %q", fiber.HeaderXForwardedFor, settings.Header)
+	}
+	if len(settings.TrustedProxies) != 2 {
+		t.Fatalf("expected default trusted proxies when env is empty and proxy is disabled, got %#v", settings.TrustedProxies)
+	}
+}
+
+func TestResolveProxySettingsRequiresTrustedProxiesWhenEnabled(t *testing.T) {
+	t.Setenv("TRUST_PROXY_ENABLED", "true")
+	t.Setenv("PROXY_HEADER", "")
+	t.Setenv("TRUSTED_PROXIES", " , ")
+
+	if _, err := resolveProxySettings(); err == nil {
+		t.Fatal("expected enabled proxy settings without trusted proxies to fail")
+	}
+}
+
+func TestResolveRegistrationMode(t *testing.T) {
+	t.Setenv("REGISTRATION_MODE", "")
+	mode, err := resolveRegistrationMode()
+	if err != nil {
+		t.Fatalf("expected default registration mode, got error: %v", err)
+	}
+	if mode != services.RegistrationModeOpen {
+		t.Fatalf("expected default registration mode open, got %q", mode)
+	}
+
+	t.Setenv("REGISTRATION_MODE", "closed")
+	mode, err = resolveRegistrationMode()
+	if err != nil {
+		t.Fatalf("expected closed registration mode, got error: %v", err)
+	}
+	if mode != services.RegistrationModeClosed {
+		t.Fatalf("expected registration mode closed, got %q", mode)
+	}
+
+	t.Setenv("REGISTRATION_MODE", "invite_only")
+	if _, err := resolveRegistrationMode(); err == nil {
+		t.Fatal("expected invalid registration mode to fail")
+	}
+}
+
+func TestResolveOIDCConfig(t *testing.T) {
+	t.Run("disabled by default", testResolveOIDCConfigDisabled)
+	t.Run("enabled requires secure cookies and valid URLs", testResolveOIDCConfigRequiresSecureCookies)
+	t.Run("enabled accepts valid hybrid config", testResolveOIDCConfigAcceptsValidConfig)
+	runOIDCConfigValidationCases(t)
+}
+
+func testResolveOIDCConfigDisabled(t *testing.T) {
+	t.Setenv("OIDC_ENABLED", "")
+	t.Setenv("OIDC_ISSUER_URL", "")
+	t.Setenv("OIDC_CLIENT_ID", "")
+	t.Setenv("OIDC_CLIENT_SECRET", "")
+	t.Setenv("OIDC_REDIRECT_URL", "")
+	t.Setenv("OIDC_AUTO_PROVISION", "")
+
+	config, err := resolveOIDCConfig(false, services.RegistrationModeOpen)
+	if err != nil {
+		t.Fatalf("expected disabled OIDC config to validate, got %v", err)
+	}
+	if config.Enabled {
+		t.Fatal("expected OIDC to be disabled by default")
+	}
+}
+
+func testResolveOIDCConfigRequiresSecureCookies(t *testing.T) {
+	setValidOIDCTestEnv(t)
+	assertResolveOIDCConfigError(t, false, services.RegistrationModeOpen, "COOKIE_SECURE=true", nil)
+}
+
+func testResolveOIDCConfigAcceptsValidConfig(t *testing.T) {
+	setValidOIDCTestEnv(t)
+	t.Setenv("OIDC_LOGIN_MODE", "oidc_only")
+	t.Setenv("OIDC_LOGOUT_MODE", "provider")
+	t.Setenv("OIDC_POST_LOGOUT_REDIRECT_URL", "https://ovumcy.example.com/login")
+	t.Setenv("OIDC_AUTO_PROVISION_ALLOWED_DOMAINS", "example.com, staff.example.com")
+	t.Setenv("OIDC_CA_FILE", writeOIDCCATestFile(t))
+
+	config, err := resolveOIDCConfig(true, services.RegistrationModeOpen)
+	if err != nil {
+		t.Fatalf("expected valid OIDC config, got %v", err)
+	}
+	if !config.Enabled {
+		t.Fatal("expected OIDC to be enabled")
+	}
+	if config.IssuerURL != "https://id.example.com" {
+		t.Fatalf("expected issuer URL to be preserved, got %q", config.IssuerURL)
+	}
+	if config.RedirectURL != "https://ovumcy.example.com"+security.OIDCCallbackPath {
+		t.Fatalf("expected redirect URL to be preserved, got %q", config.RedirectURL)
+	}
+	if config.LoginMode != security.OIDCLoginModeOIDCOnly {
+		t.Fatalf("expected oidc_only login mode, got %q", config.LoginMode)
+	}
+	if config.LogoutMode != security.OIDCLogoutModeProvider {
+		t.Fatalf("expected provider logout mode, got %q", config.LogoutMode)
+	}
+	if config.PostLogoutRedirectURL != "https://ovumcy.example.com/login" {
+		t.Fatalf("expected post-logout redirect URL to be preserved, got %q", config.PostLogoutRedirectURL)
+	}
+	if config.CAFile == "" {
+		t.Fatal("expected OIDC CA file to be preserved")
+	}
+	if len(config.AutoProvisionAllowedDomains) != 2 || config.AutoProvisionAllowedDomains[0] != "example.com" || config.AutoProvisionAllowedDomains[1] != "staff.example.com" {
+		t.Fatalf("expected normalized domain allowlist, got %#v", config.AutoProvisionAllowedDomains)
+	}
+}
+
+func runOIDCConfigValidationCases(t *testing.T) {
+	t.Helper()
+
+	invalidCAPath := func(t *testing.T) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "invalid-ca.pem")
+		if err := os.WriteFile(path, []byte("not a pem bundle"), 0o600); err != nil {
+			t.Fatalf("write invalid oidc ca file: %v", err)
+		}
+		return path
+	}
+
+	cases := []struct {
+		name             string
+		cookieSecure     bool
+		registrationMode services.RegistrationMode
+		wantContains     string
+		setup            func(t *testing.T)
+	}{
+		{
+			name:             "rejects auto provision",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeClosed,
+			wantContains:     "REGISTRATION_MODE=open",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_AUTO_PROVISION", "true")
+			},
+		},
+		{
+			name:             "rejects insecure issuer url",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_ISSUER_URL must use https",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_ISSUER_URL", "http://id.example.com")
+			},
+		},
+		{
+			name:             "rejects issuer query",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_ISSUER_URL must not include query or fragment",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_ISSUER_URL", "https://id.example.com?tenant=main")
+			},
+		},
+		{
+			name:             "rejects redirect fragment",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_REDIRECT_URL must not include query or fragment",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_REDIRECT_URL", "https://ovumcy.example.com"+security.OIDCCallbackPath+"#done")
+			},
+		},
+		{
+			name:             "rejects redirect path outside callback",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     security.OIDCCallbackPath,
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_REDIRECT_URL", "https://ovumcy.example.com/auth/callback")
+			},
+		},
+		{
+			name:             "rejects invalid login mode",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_LOGIN_MODE",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_LOGIN_MODE", "sso_only")
+			},
+		},
+		{
+			name:             "rejects invalid logout mode",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_LOGOUT_MODE",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_LOGOUT_MODE", "idp")
+			},
+		},
+		{
+			name:             "rejects post logout redirect on another origin",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "match the OIDC redirect origin",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_POST_LOGOUT_REDIRECT_URL", "https://elsewhere.example.com/login")
+			},
+		},
+		{
+			name:             "rejects invalid auto provision allowlist",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_AUTO_PROVISION_ALLOWED_DOMAINS",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_AUTO_PROVISION_ALLOWED_DOMAINS", "example.com, bad domain")
+			},
+		},
+		{
+			name:             "rejects unreadable oidc ca file",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_CA_FILE",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_CA_FILE", filepath.Join(t.TempDir(), "missing-ca.pem"))
+			},
+		},
+		{
+			name:             "rejects invalid oidc ca file contents",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_CA_FILE",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_CA_FILE", invalidCAPath(t))
+			},
+		},
+		{
+			name:             "rejects directory oidc ca path",
+			cookieSecure:     true,
+			registrationMode: services.RegistrationModeOpen,
+			wantContains:     "OIDC_CA_FILE",
+			setup: func(t *testing.T) {
+				t.Setenv("OIDC_CA_FILE", t.TempDir())
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			setValidOIDCTestEnv(t)
+			assertResolveOIDCConfigError(t, tc.cookieSecure, tc.registrationMode, tc.wantContains, tc.setup)
+		})
+	}
+}
+
+func assertResolveOIDCConfigError(t *testing.T, cookieSecure bool, registrationMode services.RegistrationMode, wantContains string, setup func(t *testing.T)) {
+	t.Helper()
+
+	if setup != nil {
+		setup(t)
+	}
+	if _, err := resolveOIDCConfig(cookieSecure, registrationMode); err == nil || !strings.Contains(err.Error(), wantContains) {
+		t.Fatalf("expected OIDC config validation error containing %q, got %v", wantContains, err)
+	}
+}
+
+func setValidOIDCTestEnv(t *testing.T) {
+	t.Helper()
+
+	t.Setenv("OIDC_ENABLED", "true")
+	t.Setenv("OIDC_ISSUER_URL", "https://id.example.com")
+	t.Setenv("OIDC_CLIENT_ID", "ovumcy")
+	t.Setenv("OIDC_CLIENT_SECRET", "secret")
+	t.Setenv("OIDC_REDIRECT_URL", "https://ovumcy.example.com"+security.OIDCCallbackPath)
+	t.Setenv("OIDC_AUTO_PROVISION", "false")
+	t.Setenv("OIDC_LOGIN_MODE", "hybrid")
+	t.Setenv("OIDC_LOGOUT_MODE", "local")
+	t.Setenv("OIDC_POST_LOGOUT_REDIRECT_URL", "")
+	t.Setenv("OIDC_AUTO_PROVISION_ALLOWED_DOMAINS", "")
+	t.Setenv("OIDC_CA_FILE", "")
+}
+
+func writeOIDCCATestFile(t *testing.T) string {
+	t.Helper()
+
+	const certPEM = `-----BEGIN CERTIFICATE-----
+MIIC9DCCAdygAwIBAgIBATANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDEwkxMjcu
+MC4wLjEwHhcNMjYwMzI4MTczMDIzWhcNMzYwMzI4MTgzMDIzWjAUMRIwEAYDVQQD
+EwkxMjcuMC4wLjEwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCfTEzc
+4zujGs9PmM6PHzFQIphEOjPAQmcaoUmCBRWjSWiVA1hIzbe0AM2wKGVE7pz8xDeY
+qGAgrXP0aUF98U+gFcNLihw8xMVkAW6R+FkV+PXAuMW7ZQAmrvq6fOkHfMWEA3/3
+4pA73uNPQDtWPOIjTz77jNRNOvymCvaUhy/bt3PqvnEzWNa9PdVSOTcLTaydGkx+
+9eq8b/Do/Tlca8pncZ7Luy+SEQAQlTPVMe4h8WWKSlyW1YVloZm5XX5Wvj4xzMmh
+oHwDwLU+wojt9hl2I6nEF8LJi3YMfYcuaUXrxC9DxToI13gzWXJqAnH40fJC7QC2
+wMZPD73wTU/nb36TAgMBAAGjUTBPMA4GA1UdDwEB/wQEAwIFoDATBgNVHSUEDDAK
+BggrBgEFBQcDATAMBgNVHRMBAf8EAjAAMBoGA1UdEQQTMBGCCWxvY2FsaG9zdIcE
+fwAAATANBgkqhkiG9w0BAQsFAAOCAQEANg0b76OBe8BtSG4JcCeQhT2IiIeIWmVs
+KLD4o/u7EzQ5d9PRodCFkkBVkP2B6fg7z1GAl/H1tKKBFidovJAbXQ/yJHqhT7IC
+QrCubmlgRkIl9YUJvaOsW0rPBLlWqz2emJH0xftH3QNPWHBVnP3R3BjrIqUG/1xU
+ADS7/yMYzyqEmi2+/nnyVMcDvPQfA9K+D32fHHteAsX8HhF2W4YAg1TlsUjpIsYc
+lILxHyF4qIl18bap1H7cTSH4ABA2fmMkIl7uqGapSzeJaMkxgSq8RxUy6k43dWOm
+Al6FYKyHksUwdVrLUsSoFtlfM7w8UhjdXDF/fvAvqvwWm9bPVCahEg==
+-----END CERTIFICATE-----`
+
+	path := filepath.Join(t.TempDir(), "oidc-ca.pem")
+	if err := os.WriteFile(path, []byte(certPEM), 0o600); err != nil {
+		t.Fatalf("write oidc ca test file: %v", err)
+	}
+	return path
+}
+
+func TestLoadRuntimeConfigBuildsExpectedSettings(t *testing.T) {
+	t.Setenv("SECRET_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_PATH", "data\\custom.db")
+	t.Setenv("DATABASE_URL", "")
+	t.Setenv("PORT", "9090")
+	t.Setenv("DEFAULT_LANGUAGE", "ru")
+	t.Setenv("REGISTRATION_MODE", "closed")
+	t.Setenv("COOKIE_SECURE", "true")
+	t.Setenv("RATE_LIMIT_LOGIN_MAX", "12")
+	t.Setenv("RATE_LIMIT_LOGIN_WINDOW", "20m")
+	t.Setenv("RATE_LIMIT_FORGOT_PASSWORD_MAX", "9")
+	t.Setenv("RATE_LIMIT_FORGOT_PASSWORD_WINDOW", "90m")
+	t.Setenv("RATE_LIMIT_API_MAX", "700")
+	t.Setenv("RATE_LIMIT_API_WINDOW", "2m")
+	t.Setenv("TRUST_PROXY_ENABLED", "true")
+	t.Setenv("PROXY_HEADER", "X-Forwarded-For")
+	t.Setenv("TRUSTED_PROXIES", "127.0.0.1, ::1")
+
+	location := time.FixedZone("UTC+3", 3*60*60)
+	config, err := loadRuntimeConfig(location)
+	if err != nil {
+		t.Fatalf("expected valid runtime config, got error: %v", err)
+	}
+
+	assertBaseRuntimeConfig(t, config, location)
+	assertRateLimitRuntimeConfig(t, config)
+	assertProxyRuntimeConfig(t, config)
+}
+
+func assertBaseRuntimeConfig(t *testing.T, config runtimeConfig, location *time.Location) {
+	t.Helper()
+
+	if config.Location != location {
+		t.Fatalf("expected runtime location to be preserved")
+	}
+	if config.SecretKey != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("expected secret key to be preserved, got %q", config.SecretKey)
+	}
+	if config.DatabaseConfig.Driver != db.DriverSQLite {
+		t.Fatalf("expected sqlite driver, got %q", config.DatabaseConfig.Driver)
+	}
+	if config.DatabaseConfig.SQLitePath != "data\\custom.db" && config.DatabaseConfig.SQLitePath != "data/custom.db" {
+		t.Fatalf("expected sqlite path to be preserved, got %q", config.DatabaseConfig.SQLitePath)
+	}
+	if config.Port != "9090" {
+		t.Fatalf("expected port 9090, got %q", config.Port)
+	}
+	if config.DefaultLanguage != "ru" {
+		t.Fatalf("expected default language ru, got %q", config.DefaultLanguage)
+	}
+	if config.RegistrationMode != services.RegistrationModeClosed {
+		t.Fatalf("expected registration mode closed, got %q", config.RegistrationMode)
+	}
+	if !config.CookieSecure {
+		t.Fatal("expected cookie secure=true")
+	}
+	if config.OIDC.Enabled {
+		t.Fatal("expected OIDC to remain disabled when env is unset")
+	}
+}
+
+func assertRateLimitRuntimeConfig(t *testing.T, config runtimeConfig) {
+	t.Helper()
+
+	if config.RateLimits.LoginMax != 12 || config.RateLimits.LoginWindow != 20*time.Minute {
+		t.Fatalf("unexpected login rate limit settings: %+v", config.RateLimits)
+	}
+	if config.RateLimits.ForgotPasswordMax != 9 || config.RateLimits.ForgotPasswordWindow != 90*time.Minute {
+		t.Fatalf("unexpected forgot-password rate limit settings: %+v", config.RateLimits)
+	}
+	if config.RateLimits.APIMax != 700 || config.RateLimits.APIWindow != 2*time.Minute {
+		t.Fatalf("unexpected api rate limit settings: %+v", config.RateLimits)
+	}
+}
+
+func assertProxyRuntimeConfig(t *testing.T, config runtimeConfig) {
+	t.Helper()
+
+	if !config.Proxy.Enabled {
+		t.Fatal("expected proxy settings enabled")
+	}
+	if config.Proxy.Header != "X-Forwarded-For" {
+		t.Fatalf("expected explicit proxy header, got %q", config.Proxy.Header)
+	}
+	if len(config.Proxy.TrustedProxies) != 2 {
+		t.Fatalf("expected two trusted proxies, got %#v", config.Proxy.TrustedProxies)
+	}
+}
+
+// TestLoadRuntimeConfigDefaultsAuditLogOff locks the privacy-first default:
+// when AUDIT_LOG_ENABLED is unset the runtime must NOT emit per-action audit
+// logs. This matches SECURITY.md and .env.example, both of which
+// state audit logging is off by default. (The api-package audit-flag test
+// covers the request path; this one exercises the startup default.)
+func TestLoadRuntimeConfigDefaultsAuditLogOff(t *testing.T) {
+	t.Setenv("SECRET_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_PATH", "data/ovumcy.db")
+	t.Setenv("AUDIT_LOG_ENABLED", "")
+
+	config, err := loadRuntimeConfig(time.UTC)
+	if err != nil {
+		t.Fatalf("load runtime config: %v", err)
+	}
+	if config.AuditLogEnabled {
+		t.Fatal("AUDIT_LOG_ENABLED must default to false (off by default per SECURITY.md / .env.example)")
+	}
+}
+
+func TestLoadRuntimeConfigHonorsAuditLogEnabled(t *testing.T) {
+	t.Setenv("SECRET_KEY", "0123456789abcdef0123456789abcdef")
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_PATH", "data/ovumcy.db")
+	t.Setenv("AUDIT_LOG_ENABLED", "true")
+
+	config, err := loadRuntimeConfig(time.UTC)
+	if err != nil {
+		t.Fatalf("load runtime config: %v", err)
+	}
+	if !config.AuditLogEnabled {
+		t.Fatal("AUDIT_LOG_ENABLED=true must enable audit logging")
+	}
+}
+
+func TestFiberConfigAppliesTrustedProxySettings(t *testing.T) {
+	config := fiberConfig(proxySettings{
+		Enabled:        true,
+		Header:         "X-Forwarded-For",
+		TrustedProxies: []string{"127.0.0.1", "::1"},
+	})
+
+	if config.ProxyHeader != "X-Forwarded-For" {
+		t.Fatalf("expected proxy header to be applied, got %q", config.ProxyHeader)
+	}
+	if !config.EnableTrustedProxyCheck {
+		t.Fatal("expected trusted proxy check to be enabled")
+	}
+	if !config.EnableIPValidation {
+		t.Fatal("expected IP validation to be enabled")
+	}
+	if len(config.TrustedProxies) != 2 {
+		t.Fatalf("expected trusted proxies to be applied, got %#v", config.TrustedProxies)
+	}
+}
+
+func TestSecurityHeadersMiddlewareSetsHeadersOnHTMLResponses(t *testing.T) {
+	app := fiber.New()
+	app.Use(securityHeadersMiddleware(false))
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("html request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	assertDefaultSecurityHeaders(t, response, false)
+}
+
+func TestSecurityHeadersMiddlewareSetsHeadersOnAPIResponses(t *testing.T) {
+	app := fiber.New()
+	app.Use(securityHeadersMiddleware(false))
+	app.Get("/api/ping", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/ping", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("api request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	assertDefaultSecurityHeaders(t, response, false)
+}
+
+func TestSecurityHeadersMiddlewareAddsHSTSWhenSecureCookiesEnabled(t *testing.T) {
+	app := fiber.New()
+	app.Use(securityHeadersMiddleware(true))
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("secure html request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	assertDefaultSecurityHeaders(t, response, true)
+}
+
+func TestOvumcyErrorHandlerMasksRawErrorsAndPreservesFiberErrors(t *testing.T) {
+	app := fiber.New(fiber.Config{ErrorHandler: ovumcyErrorHandler})
+	app.Get("/fiber-error", func(c *fiber.Ctx) error {
+		return fiber.ErrForbidden
+	})
+	app.Get("/raw-error", func(c *fiber.Ctx) error {
+		return errors.New("internal users table secret column leaked")
+	})
+
+	fiberErrResp, err := app.Test(httptest.NewRequest(http.MethodGet, "/fiber-error", nil), -1)
+	if err != nil {
+		t.Fatalf("fiber-error request failed: %v", err)
+	}
+	defer fiberErrResp.Body.Close()
+	if fiberErrResp.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("fiber.Error status = %d, want 403", fiberErrResp.StatusCode)
+	}
+	fiberBody := new(bytes.Buffer)
+	_, _ = fiberBody.ReadFrom(fiberErrResp.Body)
+	if fiberBody.String() != "Forbidden" {
+		t.Fatalf("fiber.Error body = %q, want %q (status/message preserved)", fiberBody.String(), "Forbidden")
+	}
+
+	rawErrResp, err := app.Test(httptest.NewRequest(http.MethodGet, "/raw-error", nil), -1)
+	if err != nil {
+		t.Fatalf("raw-error request failed: %v", err)
+	}
+	defer rawErrResp.Body.Close()
+	if rawErrResp.StatusCode != fiber.StatusInternalServerError {
+		t.Fatalf("raw error status = %d, want 500", rawErrResp.StatusCode)
+	}
+	rawBody := new(bytes.Buffer)
+	_, _ = rawBody.ReadFrom(rawErrResp.Body)
+	if rawBody.String() != "Internal Server Error" {
+		t.Fatalf("raw error body = %q, want generic message", rawBody.String())
+	}
+	if strings.Contains(rawBody.String(), "secret column leaked") {
+		t.Fatalf("raw error body leaked internal detail: %q", rawBody.String())
+	}
+}
+
+func TestStaticManifestUsesWebManifestContentType(t *testing.T) {
+	registerStaticContentTypes()
+
+	app := fiber.New()
+	app.Static("/static", filepath.Join("..", "..", "web", "static"))
+
+	request := httptest.NewRequest(http.MethodGet, "/static/manifest.webmanifest", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("manifest request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", response.StatusCode)
+	}
+	if contentType := response.Header.Get("Content-Type"); !strings.Contains(contentType, "application/manifest+json") {
+		t.Fatalf("expected web manifest content type, got %q", contentType)
+	}
+}
+
+func assertDefaultSecurityHeaders(t *testing.T, response *http.Response, expectStrictTransportSecurity bool) {
+	t.Helper()
+
+	if value := response.Header.Get(headerXContentTypeOptions); value != xContentTypeOptionsNoSniff {
+		t.Fatalf("expected %s=%q, got %q", headerXContentTypeOptions, xContentTypeOptionsNoSniff, value)
+	}
+	if value := response.Header.Get(headerReferrerPolicy); value != referrerPolicyStrictOrigin {
+		t.Fatalf("expected %s=%q, got %q", headerReferrerPolicy, referrerPolicyStrictOrigin, value)
+	}
+	if value := response.Header.Get(headerPermissionsPolicy); value != permissionsPolicyDefault {
+		t.Fatalf("expected %s=%q, got %q", headerPermissionsPolicy, permissionsPolicyDefault, value)
+	}
+	if value := response.Header.Get(headerCrossOriginOpenerPolicy); value != crossOriginOpenerPolicyDefault {
+		t.Fatalf("expected %s=%q, got %q", headerCrossOriginOpenerPolicy, crossOriginOpenerPolicyDefault, value)
+	}
+	if value := response.Header.Get(headerXFrameOptions); value != xFrameOptionsDeny {
+		t.Fatalf("expected %s=%q, got %q", headerXFrameOptions, xFrameOptionsDeny, value)
+	}
+	if value := response.Header.Get(headerContentSecurityPolicy); value != contentSecurityPolicyDefault {
+		t.Fatalf("expected %s=%q, got %q", headerContentSecurityPolicy, contentSecurityPolicyDefault, value)
+	}
+	if value := response.Header.Get(headerStrictTransportSecurity); expectStrictTransportSecurity {
+		if value != strictTransportSecurityDefault {
+			t.Fatalf("expected %s=%q, got %q", headerStrictTransportSecurity, strictTransportSecurityDefault, value)
+		}
+	} else if value != "" {
+		t.Fatalf("did not expect %s by default, got %q", headerStrictTransportSecurity, value)
+	}
+	if value := response.Header.Get("Cache-Control"); value != "no-store" {
+		t.Fatalf("expected Cache-Control=no-store on dynamic response, got %q", value)
+	}
+	if value := response.Header.Get("Access-Control-Allow-Origin"); value != "" {
+		t.Fatalf("did not expect Access-Control-Allow-Origin by default, got %q", value)
+	}
+}
+
+// TestSecurityHeadersMiddlewareSetsNoCacheOnDynamicRoutes verifies that
+// authenticated / dynamic responses carry Cache-Control: no-store so that
+// bfcache cannot restore health data after logout.
+func TestSecurityHeadersMiddlewareSetsNoCacheOnDynamicRoutes(t *testing.T) {
+	app := fiber.New()
+	app.Use(securityHeadersMiddleware(false))
+	app.Get("/dashboard", func(c *fiber.Ctx) error {
+		return c.SendString("ok")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/dashboard", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("dynamic route request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if value := response.Header.Get("Cache-Control"); value != "no-store" {
+		t.Fatalf("expected Cache-Control=no-store on dynamic route, got %q", value)
+	}
+}
+
+// TestSecurityHeadersMiddlewareDoesNotSetNoCacheOnStaticAssets verifies that
+// the /static prefix is exempt from the no-store guard so static assets can
+// use normal browser caching.
+func TestSecurityHeadersMiddlewareDoesNotSetNoCacheOnStaticAssets(t *testing.T) {
+	app := fiber.New()
+	app.Use(securityHeadersMiddleware(false))
+	app.Get("/static/app.js", func(c *fiber.Ctx) error {
+		return c.SendString("// js")
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("static asset request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if value := response.Header.Get("Cache-Control"); value == "no-store" {
+		t.Fatalf("did not expect Cache-Control=no-store on /static asset, got %q", value)
+	}
+}
+
+func TestLogStartupDoesNotLogForgotPasswordRateLimitDetail(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	logStartup(runtimeConfig{
+		Location: time.FixedZone("UTC+3", 3*60*60),
+		Port:     "9090",
+		RateLimits: rateLimitSettings{
+			LoginMax:             12,
+			LoginWindow:          20 * time.Minute,
+			ForgotPasswordMax:    9,
+			ForgotPasswordWindow: 90 * time.Minute,
+			APIMax:               700,
+			APIWindow:            2 * time.Minute,
+		},
+		Proxy: proxySettings{
+			Enabled: false,
+		},
+	})
+
+	logLine := output.String()
+	if strings.Contains(logLine, "forgot=") {
+		t.Fatalf("did not expect forgot-password rate limit detail in startup log: %q", logLine)
+	}
+	if strings.Contains(logLine, "90m0s") {
+		t.Fatalf("did not expect forgot-password window in startup log: %q", logLine)
+	}
+	if !strings.Contains(logLine, "login=12/20m0s") {
+		t.Fatalf("expected login rate limit detail in startup log, got %q", logLine)
+	}
+	if !strings.Contains(logLine, "api=700/2m0s") {
+		t.Fatalf("expected api rate limit detail in startup log, got %q", logLine)
+	}
+}
+
+func TestProxyHeaderRateLimitWarning(t *testing.T) {
+	tests := []struct {
+		name     string
+		proxy    proxySettings
+		wantWarn bool
+	}{
+		{name: "trust proxy with X-Forwarded-For warns", proxy: proxySettings{Enabled: true, Header: "X-Forwarded-For"}, wantWarn: true},
+		{name: "case/space insensitive header warns", proxy: proxySettings{Enabled: true, Header: " x-forwarded-for "}, wantWarn: true},
+		{name: "trust proxy with X-Real-IP is safe", proxy: proxySettings{Enabled: true, Header: "X-Real-IP"}, wantWarn: false},
+		{name: "disabled trust proxy never warns", proxy: proxySettings{Enabled: false, Header: "X-Forwarded-For"}, wantWarn: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := proxyHeaderRateLimitWarning(tc.proxy)
+			if !tc.wantWarn {
+				if got != "" {
+					t.Fatalf("expected no note, got %q", got)
+				}
+				return
+			}
+			if got == "" {
+				t.Fatal("expected a spoofable-header note, got none")
+			}
+			// The note must reflect the post-keygen reality: the limiters are
+			// hardened (rightmost untrusted) and the actionable fix is X-Real-IP.
+			// It must NOT claim the rate limiter itself is spoofable.
+			if !strings.Contains(got, "rightmost untrusted") {
+				t.Fatalf("note should state the limiter keys on the rightmost untrusted hop, got %q", got)
+			}
+			if !strings.Contains(got, "X-Real-IP") {
+				t.Fatalf("note should recommend X-Real-IP, got %q", got)
+			}
+			if strings.Contains(got, "rate limiter keys on the leftmost") {
+				t.Fatalf("note must not claim the rate limiter keys on the spoofable leftmost entry, got %q", got)
+			}
+		})
+	}
+}
+
+func TestLogStartupWarnsOnSpoofableProxyHeader(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	logStartup(runtimeConfig{
+		Location: time.UTC,
+		Port:     "8080",
+		Proxy: proxySettings{
+			Enabled: true,
+			Header:  "X-Forwarded-For",
+		},
+	})
+
+	logged := output.String()
+	if !strings.Contains(logged, "PROXY_HEADER=X-Forwarded-For") {
+		t.Fatalf("expected spoofable-proxy-header note in startup log, got %q", logged)
+	}
+	// The note must describe the hardened keying, not the obsolete claim that
+	// the limiter trusts the leftmost (spoofable) X-Forwarded-For entry.
+	if !strings.Contains(logged, "rightmost untrusted") {
+		t.Fatalf("expected startup note to mention the rightmost-untrusted keying, got %q", logged)
+	}
+}
+
+func TestLogStartupAdvisesWhenTrustProxyDisabled(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	logStartup(runtimeConfig{
+		Location: time.UTC,
+		Port:     "8080",
+		Proxy: proxySettings{
+			Enabled: false,
+		},
+	})
+
+	logged := output.String()
+	if !strings.Contains(logged, "TRUST_PROXY_ENABLED=false") {
+		t.Fatalf("expected proxy-disabled advisory in startup log, got %q", logged)
+	}
+	if !strings.Contains(logged, "reverse proxy") {
+		t.Fatalf("expected advisory to mention reverse proxy, got %q", logged)
+	}
+}
+
+func TestLogStartupDoesNotAdviseTrustProxyWhenEnabled(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	logStartup(runtimeConfig{
+		Location: time.UTC,
+		Port:     "8080",
+		Proxy: proxySettings{
+			Enabled:        true,
+			Header:         "X-Real-IP",
+			TrustedProxies: []string{"127.0.0.1"},
+		},
+	})
+
+	logged := output.String()
+	if strings.Contains(logged, "TRUST_PROXY_ENABLED=false") {
+		t.Fatalf("did not expect proxy-disabled advisory when proxy is enabled, got %q", logged)
+	}
+}
+
+func TestTryRunCLICommandWithHandlersDispatchesUsersCommand(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_PATH", filepath.Join(t.TempDir(), "cli-users.db"))
+	t.Setenv("DATABASE_URL", "")
+
+	called := false
+	handled, err := tryRunCLICommandWithHandlers([]string{"users", "list"}, cliCommandHandlers{
+		runResetPassword: func(db.Config, string) error {
+			t.Fatal("did not expect reset-password handler")
+			return nil
+		},
+		runUsers: func(databaseConfig db.Config, args []string) error {
+			called = true
+			if databaseConfig.Driver != db.DriverSQLite {
+				t.Fatalf("expected sqlite driver, got %q", databaseConfig.Driver)
+			}
+			if len(args) != 1 || args[0] != "list" {
+				t.Fatalf("unexpected users args: %#v", args)
+			}
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !handled {
+		t.Fatal("expected CLI command to be handled")
+	}
+	if !called {
+		t.Fatal("expected users handler to be called")
+	}
+}
+
+func TestTryRunCLICommandWithHandlersRejectsMissingUsersSubcommand(t *testing.T) {
+	handled, err := tryRunCLICommandWithHandlers([]string{"users"}, cliCommandHandlers{})
+	if !handled {
+		t.Fatal("expected users command to be handled")
+	}
+	if err == nil || !strings.Contains(err.Error(), "usage: ovumcy users <list|delete>") {
+		t.Fatalf("expected users usage error, got %v", err)
+	}
+}
+
+func TestTryRunCLICommandWithHandlersPropagatesUsersError(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DB_PATH", filepath.Join(t.TempDir(), "cli-users.db"))
+	t.Setenv("DATABASE_URL", "")
+
+	expectedErr := errors.New("delete failed")
+	handled, err := tryRunCLICommandWithHandlers([]string{"users", "delete", "owner@example.com", "--yes"}, cliCommandHandlers{
+		runResetPassword: func(db.Config, string) error {
+			t.Fatal("did not expect reset-password handler")
+			return nil
+		},
+		runUsers: func(db.Config, []string) error {
+			return expectedErr
+		},
+	})
+	if !handled {
+		t.Fatal("expected users command to be handled")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected propagated users error, got %v", err)
+	}
+}
+
+func TestTryRunCLICommandWithHandlersDispatchesHealthcheck(t *testing.T) {
+	t.Setenv("PORT", "9876")
+
+	var receivedPort string
+	handled, err := tryRunCLICommandWithHandlers([]string{"healthcheck"}, cliCommandHandlers{
+		runHealthcheck: func(port string, _ time.Duration) error {
+			receivedPort = port
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !handled {
+		t.Fatal("expected healthcheck command to be handled")
+	}
+	if receivedPort != "9876" {
+		t.Fatalf("expected port forwarded from PORT env, got %q", receivedPort)
+	}
+}
+
+func TestTryRunCLICommandWithHandlersRejectsHealthcheckExtraArgs(t *testing.T) {
+	handled, err := tryRunCLICommandWithHandlers([]string{"healthcheck", "extra"}, cliCommandHandlers{
+		runHealthcheck: func(string, time.Duration) error {
+			t.Fatal("did not expect healthcheck handler to be called")
+			return nil
+		},
+	})
+	if !handled {
+		t.Fatal("expected healthcheck command to be handled")
+	}
+	if err == nil || !strings.Contains(err.Error(), "usage: ovumcy healthcheck") {
+		t.Fatalf("expected healthcheck usage error, got %v", err)
+	}
+}
+
+func TestTryRunCLICommandWithHandlersPropagatesHealthcheckError(t *testing.T) {
+	expectedErr := errors.New("probe failed")
+	handled, err := tryRunCLICommandWithHandlers([]string{"healthcheck"}, cliCommandHandlers{
+		runHealthcheck: func(string, time.Duration) error {
+			return expectedErr
+		},
+	})
+	if !handled {
+		t.Fatal("expected healthcheck command to be handled")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected propagated healthcheck error, got %v", err)
+	}
+}
+
+func testResponseCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie != nil && cookie.Name == name {
+			return cookie
+		}
+	}
+	return nil
+}
+
+func TestDefaultRequestLoggerDoesNotLogQueryPII(t *testing.T) {
+	var output bytes.Buffer
+	app := fiber.New()
+	app.Use(logger.New(logger.Config{
+		Output: &output,
+	}))
+	app.Get("/reset-password", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/reset-password?token=plain-reset-token&email=user@example.com",
+		nil,
+	)
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, "/reset-password") {
+		t.Fatalf("expected request path in logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, "plain-reset-token") {
+		t.Fatalf("did not expect reset token in request logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "user@example.com") {
+		t.Fatalf("did not expect email in request logs: %q", logLine)
+	}
+}
+
+func TestDefaultRequestLoggerDoesNotLogFormSecrets(t *testing.T) {
+	const plaintextPassword = "PlaintextPassword123!"
+	const plaintextToken = "plain-reset-token"
+
+	var output bytes.Buffer
+	app := fiber.New()
+	app.Use(logger.New(logger.Config{
+		Output: &output,
+	}))
+	app.Post("/api/v1/password-resets/redeem", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	form := "password=PlaintextPassword123%21&confirm_password=PlaintextPassword123%21&token=plain-reset-token"
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/password-resets/redeem",
+		strings.NewReader(form),
+	)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, "/api/v1/password-resets/redeem") {
+		t.Fatalf("expected request path in logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, plaintextPassword) {
+		t.Fatalf("did not expect plaintext password in request logs: %q", logLine)
+	}
+	if strings.Contains(logLine, plaintextToken) {
+		t.Fatalf("did not expect reset token in request logs: %q", logLine)
+	}
+}
+
+func TestRequestLoggerUsesSafeRouteTemplateWithoutIP(t *testing.T) {
+	var output bytes.Buffer
+	app := fiber.New()
+	app.Use(newRequestLogger(&output))
+	app.Put("/api/v1/days/:date", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/days/2026-02-17", nil)
+	request.RemoteAddr = "203.0.113.9:43123"
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, "/api/v1/days/:date") {
+		t.Fatalf("expected safe route template in request logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, "2026-02-17") {
+		t.Fatalf("did not expect concrete health date in request logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "203.0.113.9") {
+		t.Fatalf("did not expect raw client ip in request logs: %q", logLine)
+	}
+}
+
+func TestRateLimitLogDoesNotLogQueryPII(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	const plaintextPassword = "PlaintextPassword123!"
+
+	app := fiber.New()
+	app.Put("/api/v1/days/:date", func(c *fiber.Ctx) error {
+		c.Response().Header.Set(fiber.HeaderRetryAfter, "60")
+		logRateLimitHit(c)
+		return c.SendStatus(http.StatusTooManyRequests)
+	})
+
+	request := httptest.NewRequest(
+		http.MethodPut,
+		"/api/v1/days/2026-02-17?token=plain-reset-token&email=user@example.com",
+		strings.NewReader("email=user@example.com&password=PlaintextPassword123%21&token=plain-reset-token"),
+	)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.RemoteAddr = "203.0.113.9:43123"
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("rate limit request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, "path=/api/v1/days/:date") {
+		t.Fatalf("expected sanitized path without query string in rate-limit logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, "plain-reset-token") {
+		t.Fatalf("did not expect reset token in rate-limit logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "user@example.com") {
+		t.Fatalf("did not expect email in rate-limit logs: %q", logLine)
+	}
+	if strings.Contains(logLine, plaintextPassword) {
+		t.Fatalf("did not expect plaintext password in rate-limit logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "2026-02-17") {
+		t.Fatalf("did not expect concrete health date in rate-limit logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "203.0.113.9") {
+		t.Fatalf("did not expect raw client ip in rate-limit logs: %q", logLine)
+	}
+}
+
+func TestCSRFMiddlewareErrorHandlerLogsSecurityEventWithoutPII(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	handler := newRateLimitTestHandler(t)
+	app := fiber.New()
+	app.Use(csrf.New(csrfMiddlewareConfig(false, handler)))
+	app.Post("/settings/change-password", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusOK)
+	})
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/settings/change-password?email=user@example.com",
+		strings.NewReader("password=PlaintextPassword123%21"),
+	)
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("csrf request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status 403, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, `security event: action="csrf" outcome="denied"`) {
+		t.Fatalf("expected csrf security event in logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, "user@example.com") {
+		t.Fatalf("did not expect email in csrf security logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "PlaintextPassword123!") {
+		t.Fatalf("did not expect password in csrf security logs: %q", logLine)
+	}
+}
+
+func TestAuthRateLimitHandlerLogsSecurityEventWithoutPII(t *testing.T) {
+	originalWriter := log.Writer()
+	defer log.SetOutput(originalWriter)
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+
+	handler := newRateLimitTestHandler(t)
+	app := fiber.New()
+	app.Post("/api/v1/sessions", newAuthRateLimitHandler(handler, authRateLimitConfig{
+		ErrorCode: "too_many_login_attempts",
+	}))
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/sessions?email=user@example.com",
+		strings.NewReader("email=user@example.com&password=PlaintextPassword123%21"),
+	)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("rate-limit handler request failed: %v", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", response.StatusCode)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, `security event: action="rate_limit" outcome="blocked"`) {
+		t.Fatalf("expected rate-limit security event in logs, got %q", logLine)
+	}
+	if !strings.Contains(logLine, `scope="auth"`) {
+		t.Fatalf("expected auth scope in rate-limit security logs, got %q", logLine)
+	}
+	if strings.Contains(logLine, "user@example.com") {
+		t.Fatalf("did not expect email in rate-limit security logs: %q", logLine)
+	}
+	if strings.Contains(logLine, "PlaintextPassword123!") {
+		t.Fatalf("did not expect password in rate-limit security logs: %q", logLine)
+	}
+}
+
+func TestConfigureFiberMiddlewareRateLimitsOIDCStart(t *testing.T) {
+	handler := newRateLimitTestHandler(t)
+	app := fiber.New()
+	configureFiberMiddleware(app, runtimeConfig{
+		CookieSecure: false,
+		RateLimits: rateLimitSettings{
+			LoginMax:             1,
+			LoginWindow:          time.Minute,
+			ForgotPasswordMax:    8,
+			ForgotPasswordWindow: time.Hour,
+			APIMax:               300,
+			APIWindow:            time.Minute,
+		},
+	}, handler)
+	app.Get("/auth/oidc/start", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodGet, "/auth/oidc/start", nil)
+	request.RemoteAddr = "203.0.113.10:43123"
+	first := mustRateLimitedResponse(t, app, request)
+	if first.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected first OIDC start request to pass, got %d", first.StatusCode)
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/auth/oidc/start", nil)
+	secondRequest.RemoteAddr = "203.0.113.10:43123"
+	second := mustRateLimitedResponse(t, app, secondRequest)
+	if second.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected second OIDC start request to be rate limited, got %d", second.StatusCode)
+	}
+	if location := second.Header.Get("Location"); location != "/login" {
+		t.Fatalf("expected OIDC start rate limit redirect to /login, got %q", location)
+	}
+}
+
+func TestConfigureFiberMiddlewareRateLimitsOIDCCallback(t *testing.T) {
+	handler := newRateLimitTestHandler(t)
+	app := fiber.New()
+	configureFiberMiddleware(app, runtimeConfig{
+		CookieSecure: false,
+		RateLimits: rateLimitSettings{
+			LoginMax:             1,
+			LoginWindow:          time.Minute,
+			ForgotPasswordMax:    8,
+			ForgotPasswordWindow: time.Hour,
+			APIMax:               300,
+			APIWindow:            time.Minute,
+		},
+	}, handler)
+	app.Post(security.OIDCCallbackPath, func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusNoContent)
+	})
+
+	request := httptest.NewRequest(http.MethodPost, security.OIDCCallbackPath, strings.NewReader("state=one&code=provider-code"))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.RemoteAddr = "203.0.113.11:43123"
+	first := mustRateLimitedResponse(t, app, request)
+	if first.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected first OIDC callback request to pass, got %d", first.StatusCode)
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodPost, security.OIDCCallbackPath, strings.NewReader("state=two&code=provider-code"))
+	secondRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	secondRequest.RemoteAddr = "203.0.113.11:43123"
+	second := mustRateLimitedResponse(t, app, secondRequest)
+	if second.StatusCode != http.StatusSeeOther {
+		t.Fatalf("expected second OIDC callback request to be rate limited, got %d", second.StatusCode)
+	}
+	if location := second.Header.Get("Location"); location != "/login" {
+		t.Fatalf("expected OIDC callback rate limit redirect to /login, got %q", location)
+	}
+}
+
+func mustRateLimitedResponse(t *testing.T, app *fiber.App, request *http.Request) *http.Response {
+	t.Helper()
+
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatalf("rate-limit request failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = response.Body.Close()
+	})
+	return response
+}
+
+// TestCloseDatabaseClosesUnderlyingConnection verifies the close-on-exit
+// path actually releases the database: after closeDatabase the underlying
+// *sql.DB must reject further use, so SQLite has checkpointed its WAL and
+// freed the file before process exit.
+func TestCloseDatabaseClosesUnderlyingConnection(t *testing.T) {
+	database, err := db.OpenSQLite(filepath.Join(t.TempDir(), "close-test.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLite() unexpected error: %v", err)
+	}
+
+	closeDatabase(database)
+
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatalf("database.DB() unexpected error: %v", err)
+	}
+	if err := sqlDB.Ping(); err == nil {
+		t.Fatal("expected Ping to fail after closeDatabase, got nil")
+	}
+
+	// A second close must stay quiet (idempotent exit path).
+	closeDatabase(database)
+}
+
+// TestRunServerClosesDatabaseOnListenError pins the failure exit path: when
+// the listener cannot bind, runServer must still close the database before
+// returning the error, so SQLite checkpoints its WAL even on a failed start.
+func TestRunServerClosesDatabaseOnListenError(t *testing.T) {
+	database, err := db.OpenSQLite(filepath.Join(t.TempDir(), "runserver-err.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLite() unexpected error: %v", err)
+	}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+
+	if err := runServer(app, database, "256.256.256.256:0"); err == nil {
+		t.Fatal("expected runServer to fail on an unbindable address")
+	}
+
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatalf("database.DB() unexpected error: %v", err)
+	}
+	if err := sqlDB.Ping(); err == nil {
+		t.Fatal("expected database to be closed after a failed listen")
+	}
+}
+
+// TestRunServerClosesDatabaseAfterGracefulStop pins the graceful exit path:
+// Listen returns nil after a graceful stop, and runServer closes the
+// database before handing control back to main. The stop is issued only
+// after a TCP dial against the bound listener succeeds — calling Shutdown
+// straight from the OnListen hook races the accept loop and can fire before
+// the server is stoppable, hanging Listen forever.
+func TestRunServerClosesDatabaseAfterGracefulStop(t *testing.T) {
+	database, err := db.OpenSQLite(filepath.Join(t.TempDir(), "runserver-stop.db"))
+	if err != nil {
+		t.Fatalf("OpenSQLite() unexpected error: %v", err)
+	}
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+
+	addrCh := make(chan string, 1)
+	app.Hooks().OnListen(func(listenData fiber.ListenData) error {
+		addrCh <- net.JoinHostPort(listenData.Host, listenData.Port)
+		return nil
+	})
+	go func() {
+		address := <-addrCh
+		for {
+			conn, dialErr := net.Dial("tcp", address)
+			if dialErr == nil {
+				_ = conn.Close()
+				_ = app.Shutdown()
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	done := make(chan error, 1)
+	go func() { done <- runServer(app, database, "127.0.0.1:0") }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("runServer after graceful stop: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("runServer did not return within 30s of the graceful stop")
+	}
+
+	sqlDB, err := database.DB()
+	if err != nil {
+		t.Fatalf("database.DB() unexpected error: %v", err)
+	}
+	if err := sqlDB.Ping(); err == nil {
+		t.Fatal("expected database to be closed after a graceful stop")
+	}
+}
+
+// TestCloseDatabaseLogsWhenPoolUnavailable covers the defensive branch: a
+// gorm handle without a connection pool cannot be closed, and closeDatabase
+// must log instead of panicking.
+func TestCloseDatabaseLogsWhenPoolUnavailable(t *testing.T) {
+	var buffer bytes.Buffer
+	log.SetOutput(&buffer)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	closeDatabase(&gorm.DB{Config: &gorm.Config{}})
+
+	if !strings.Contains(buffer.String(), "database close:") {
+		t.Fatalf("expected close failure to be logged, got %q", buffer.String())
+	}
+}

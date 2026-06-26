@@ -1,0 +1,11 @@
+{{define "content"}}
+<section class="mx-auto flex min-h-[72vh] max-w-3xl items-center justify-center">
+  {{template "recovery_code_panel" (dict
+    "Messages" .Messages
+    "RecoveryCode" .RecoveryCode
+    "ContinuePath" .ContinuePath
+    "ContinueTarget" .ContinueTarget
+    "Inline" false)}}
+</section>
+
+{{end}}

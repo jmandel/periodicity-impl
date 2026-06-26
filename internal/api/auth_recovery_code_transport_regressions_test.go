@@ -1,0 +1,379 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"golang.org/x/net/html"
+)
+
+func TestRegisterJSONSuccessDoesNotExposeRecoveryCode(t *testing.T) {
+	app, _ := newOnboardingTestApp(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(url.Values{
+		"email":            {"json-register@example.com"},
+		"password":         {"StrongPass1"},
+		"confirm_password": {"StrongPass1"},
+		"consent":          {"true"},
+	}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept", "application/json")
+
+	response := mustAppResponse(t, app, request)
+	assertStatusCode(t, response, http.StatusCreated)
+
+	payload := readRecoveryCodeFlowJSON(t, response)
+	if got, ok := payload["ok"].(bool); !ok || !got {
+		t.Fatalf("expected ok=true payload, got %#v", payload)
+	}
+	if got := stringValue(payload["next_step"]); got != "register_welcome" {
+		t.Fatalf("expected next_step register_welcome, got %#v", payload["next_step"])
+	}
+	if got := stringValue(payload["next_path"]); got != "/register/welcome" {
+		t.Fatalf("expected next_path /register/welcome, got %#v", payload["next_path"])
+	}
+	if _, exposed := payload["recovery_code"]; exposed {
+		t.Fatalf("did not expect recovery_code in JSON register response: %#v", payload)
+	}
+
+	pickup := responseCookieValue(response.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie on register JSON response")
+	}
+	if cookie := responseCookieValue(response.Cookies(), authCookieName); cookie != "" {
+		t.Fatalf("expected no auth cookie on register JSON response; got %q", cookie)
+	}
+	if cookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName); cookie != "" {
+		t.Fatalf("expected no recovery cookie on register JSON response; got %q", cookie)
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	pickupResponse := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, pickupResponse, http.StatusSeeOther)
+	assertRecoveryCodeTransportCookies(t, pickupResponse)
+}
+
+func TestResetPasswordJSONSuccessDoesNotExposeRecoveryCode(t *testing.T) {
+	app, database := newOnboardingTestApp(t)
+	user := createOnboardingTestUser(t, database, "json-reset@example.com", "StrongPass1", true)
+
+	recoveryCode := mustSetRecoveryCodeForUser(t, database, user.ID)
+	startResetRequest := httptest.NewRequest(http.MethodPost, "/api/v1/password-resets", strings.NewReader(url.Values{
+		"email":         {user.Email},
+		"recovery_code": {recoveryCode},
+	}.Encode()))
+	startResetRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	startResetResponse := mustAppResponse(t, app, startResetRequest)
+	assertStatusCode(t, startResetResponse, http.StatusSeeOther)
+
+	resetCookie := responseCookieValue(startResetResponse.Cookies(), resetPasswordCookieName)
+	if resetCookie == "" {
+		t.Fatal("expected reset-password cookie after forgot-password flow")
+	}
+
+	completeResetRequest := httptest.NewRequest(http.MethodPost, "/api/v1/password-resets/redeem", strings.NewReader(url.Values{
+		"password":         {"EvenStronger2"},
+		"confirm_password": {"EvenStronger2"},
+	}.Encode()))
+	completeResetRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	completeResetRequest.Header.Set("Accept", "application/json")
+	completeResetRequest.Header.Set("Cookie", resetPasswordCookieName+"="+resetCookie)
+
+	completeResetResponse := mustAppResponse(t, app, completeResetRequest)
+	assertStatusCode(t, completeResetResponse, http.StatusOK)
+
+	payload := readRecoveryCodeFlowJSON(t, completeResetResponse)
+	assertRecoveryCodeIssuedViaSurface(t, payload, "/recovery-code")
+	assertRecoveryCodeTransportCookies(t, completeResetResponse)
+}
+
+func TestRegenerateRecoveryCodeRedirectsToDedicatedRecoveryPage(t *testing.T) {
+	ctx := newSettingsSecurityTestContext(t, "settings-regenerate@example.com")
+
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{
+		"password": {"StrongPass1"},
+	}, nil)
+	assertStatusCode(t, response, http.StatusSeeOther)
+	if location := response.Header.Get("Location"); location != "/recovery-code" {
+		t.Fatalf("expected redirect to /recovery-code, got %q", location)
+	}
+
+	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	if recoveryCookie == "" {
+		t.Fatal("expected recovery-code page cookie after regeneration")
+	}
+	newAuthCookie := responseCookieValue(response.Cookies(), authCookieName)
+	if newAuthCookie == "" {
+		t.Fatal("expected fresh auth cookie after recovery code regeneration (session version was bumped)")
+	}
+
+	recoveryPageRequest := httptest.NewRequest(http.MethodGet, "/recovery-code", nil)
+	recoveryPageRequest.Header.Set("Accept-Language", "en")
+	recoveryPageRequest.Header.Set("Cookie", authCookieName+"="+newAuthCookie+"; "+recoveryCodeCookieName+"="+recoveryCookie)
+
+	recoveryPageResponse := mustAppResponse(t, ctx.app, recoveryPageRequest)
+	assertStatusCode(t, recoveryPageResponse, http.StatusOK)
+	recoveryPage := mustReadBodyString(t, recoveryPageResponse.Body)
+
+	assertRecoveryCodeSurface(t, recoveryPage, recoveryCodeSurfaceExpectations{
+		expectedAction: "/settings",
+		expectedTarget: recoveryCodeContinueTargetSettings,
+	})
+}
+
+func TestRegenerateRecoveryCodeJSONDoesNotExposeRecoveryCode(t *testing.T) {
+	ctx := newSettingsSecurityTestContext(t, "settings-regenerate-json@example.com")
+
+	response := settingsFormRequestWithCSRF(t, ctx, http.MethodPost, "/api/v1/users/current/recovery-code", url.Values{
+		"password": {"StrongPass1"},
+	}, map[string]string{
+		"Accept": "application/json",
+	})
+	assertStatusCode(t, response, http.StatusOK)
+
+	payload := readRecoveryCodeFlowJSON(t, response)
+	assertRecoveryCodeIssuedViaSurface(t, payload, "/recovery-code")
+
+	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	if recoveryCookie == "" {
+		t.Fatal("expected recovery-code page cookie after json regeneration")
+	}
+}
+
+func TestRegisterInlineRecoveryStepConsumesCookieAfterFirstView(t *testing.T) {
+	app, _ := newOnboardingTestApp(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(url.Values{
+		"email":            {"one-time-recovery@example.com"},
+		"password":         {"StrongPass1"},
+		"confirm_password": {"StrongPass1"},
+		"consent":          {"true"},
+	}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept-Language", "en")
+
+	registerResponse := mustAppResponse(t, app, request)
+	assertStatusCode(t, registerResponse, http.StatusSeeOther)
+	if location := registerResponse.Header.Get("Location"); location != "/register/welcome" {
+		t.Fatalf("expected register success redirect /register/welcome, got %q", location)
+	}
+	pickup := responseCookieValue(registerResponse.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie after registration")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Accept-Language", "en")
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	response := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, response, http.StatusSeeOther)
+	if location := response.Header.Get("Location"); location != "/register" {
+		t.Fatalf("expected pickup success redirect /register, got %q", location)
+	}
+
+	authCookie := responseCookieValue(response.Cookies(), authCookieName)
+	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	if authCookie == "" || recoveryCookie == "" {
+		t.Fatal("expected auth and recovery cookies after pickup")
+	}
+
+	firstViewRequest := httptest.NewRequest(http.MethodGet, "/register", nil)
+	firstViewRequest.Header.Set("Accept-Language", "en")
+	firstViewRequest.Header.Set("Cookie", authCookieName+"="+authCookie+"; "+recoveryCodeCookieName+"="+recoveryCookie)
+
+	firstViewResponse := mustAppResponse(t, app, firstViewRequest)
+	assertStatusCode(t, firstViewResponse, http.StatusOK)
+	body := mustReadBodyString(t, firstViewResponse.Body)
+	assertBodyContainsAll(t, body,
+		bodyStringMatch{fragment: `data-auth-inline-recovery`, message: "expected inline recovery block on first view"},
+		bodyStringMatch{fragment: `id="recovery-code"`, message: "expected recovery code on first view"},
+	)
+
+	clearedCookie := responseCookie(firstViewResponse.Cookies(), recoveryCodeCookieName)
+	if clearedCookie == nil {
+		t.Fatal("expected recovery-code cookie to be cleared after first view")
+	}
+	if clearedCookie.Value != "" || !clearedCookie.Expires.Before(time.Now()) {
+		t.Fatalf("expected recovery-code cookie to be cleared, got %#v", clearedCookie)
+	}
+
+	secondViewRequest := httptest.NewRequest(http.MethodGet, "/register", nil)
+	secondViewRequest.Header.Set("Accept-Language", "en")
+	secondViewRequest.Header.Set("Cookie", authCookieName+"="+authCookie)
+
+	secondViewResponse := mustAppResponse(t, app, secondViewRequest)
+	assertStatusCode(t, secondViewResponse, http.StatusSeeOther)
+	if location := secondViewResponse.Header.Get("Location"); location != "/onboarding" {
+		t.Fatalf("expected second recovery-code request to redirect to /onboarding, got %q", location)
+	}
+}
+
+func TestRecoveryCodePageRedirectsInlineRegistrationSurfaceBackToRegister(t *testing.T) {
+	app, _ := newOnboardingTestApp(t)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/users", strings.NewReader(url.Values{
+		"email":            {"inline-surface@example.com"},
+		"password":         {"StrongPass1"},
+		"confirm_password": {"StrongPass1"},
+		"consent":          {"true"},
+	}.Encode()))
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("Accept-Language", "en")
+
+	registerResponse := mustAppResponse(t, app, request)
+	assertStatusCode(t, registerResponse, http.StatusSeeOther)
+	pickup := responseCookieValue(registerResponse.Cookies(), registerPickupCookieName)
+	if pickup == "" {
+		t.Fatal("expected pickup cookie after registration")
+	}
+
+	pickupRequest := httptest.NewRequest(http.MethodGet, "/register/welcome", nil)
+	pickupRequest.Header.Set("Accept-Language", "en")
+	pickupRequest.Header.Set("Cookie", registerPickupCookieName+"="+pickup)
+	response := mustAppResponse(t, app, pickupRequest)
+	assertStatusCode(t, response, http.StatusSeeOther)
+
+	authCookie := responseCookieValue(response.Cookies(), authCookieName)
+	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	if authCookie == "" || recoveryCookie == "" {
+		t.Fatal("expected auth and recovery cookies after pickup")
+	}
+
+	recoveryPageRequest := httptest.NewRequest(http.MethodGet, "/recovery-code", nil)
+	recoveryPageRequest.Header.Set("Accept-Language", "en")
+	recoveryPageRequest.Header.Set("Cookie", authCookieName+"="+authCookie+"; "+recoveryCodeCookieName+"="+recoveryCookie)
+
+	recoveryPageResponse := mustAppResponse(t, app, recoveryPageRequest)
+	assertStatusCode(t, recoveryPageResponse, http.StatusSeeOther)
+	if location := recoveryPageResponse.Header.Get("Location"); location != "/register" {
+		t.Fatalf("expected inline registration recovery cookie to redirect back to /register, got %q", location)
+	}
+}
+
+func readRecoveryCodeFlowJSON(t *testing.T, response *http.Response) map[string]any {
+	t.Helper()
+
+	payload := map[string]any{}
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode recovery-code json response: %v", err)
+	}
+	return payload
+}
+
+func assertRecoveryCodeIssuedViaSurface(t *testing.T, payload map[string]any, expectedPath string) {
+	t.Helper()
+
+	if got, ok := payload["ok"].(bool); !ok || !got {
+		t.Fatalf("expected ok=true payload, got %#v", payload)
+	}
+	if got := strings.TrimSpace(stringValue(payload["next_step"])); got != "recovery_code" {
+		t.Fatalf("expected next_step recovery_code, got %#v", payload["next_step"])
+	}
+	if got := strings.TrimSpace(stringValue(payload["next_path"])); got != expectedPath {
+		t.Fatalf("expected next_path %s, got %#v", expectedPath, payload["next_path"])
+	}
+	if _, exposed := payload["recovery_code"]; exposed {
+		t.Fatalf("did not expect recovery_code in json payload: %#v", payload)
+	}
+}
+
+func assertRecoveryCodeTransportCookies(t *testing.T, response *http.Response) {
+	t.Helper()
+
+	authCookie := responseCookieValue(response.Cookies(), authCookieName)
+	if authCookie == "" {
+		t.Fatal("expected auth cookie in recovery-code issuance response")
+	}
+	recoveryCookie := responseCookieValue(response.Cookies(), recoveryCodeCookieName)
+	if recoveryCookie == "" {
+		t.Fatal("expected recovery-code page cookie in issuance response")
+	}
+}
+
+func stringValue(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	return ""
+}
+
+type recoveryCodeSurfaceExpectations struct {
+	expectedAction string
+	expectedTarget string
+	inline         bool
+}
+
+func assertRecoveryCodeSurface(t *testing.T, markup string, expectations recoveryCodeSurfaceExpectations) {
+	t.Helper()
+
+	document := mustParseHTMLDocument(t, markup)
+	panel := requireRecoveryCodeSurfacePanel(t, document, expectations.inline)
+	assertRenderedRecoveryCodeValue(t, panel)
+	assertRecoveryCodeConfirmFormSurface(t, panel, expectations.expectedAction, expectations.expectedTarget)
+}
+
+func requireRecoveryCodeSurfacePanel(t *testing.T, document *html.Node, inline bool) *html.Node {
+	t.Helper()
+
+	panel := htmlFindElement(document, func(node *html.Node) bool {
+		return node.Type == html.ElementNode && htmlHasAttr(node, "data-recovery-code-tools")
+	})
+	if panel == nil {
+		t.Fatal("expected recovery-code surface")
+	}
+	if inline && !htmlHasAttr(panel, "data-auth-inline-recovery") {
+		t.Fatal("expected inline recovery-code surface")
+	}
+	if !inline && htmlHasAttr(panel, "data-auth-inline-recovery") {
+		t.Fatal("did not expect inline recovery-code surface")
+	}
+	return panel
+}
+
+func assertRenderedRecoveryCodeValue(t *testing.T, panel *html.Node) {
+	t.Helper()
+
+	recoveryCode := htmlElementByID(panel, "recovery-code")
+	if recoveryCode == nil {
+		t.Fatal("expected rendered recovery code")
+	}
+	if normalizeHTMLText(htmlNodeText(recoveryCode)) == "" {
+		t.Fatal("expected non-empty recovery code text")
+	}
+}
+
+func assertRecoveryCodeConfirmFormSurface(t *testing.T, panel *html.Node, expectedAction string, expectedTarget string) {
+	t.Helper()
+
+	confirmForm := htmlFindElement(panel, func(node *html.Node) bool {
+		return node.Type == html.ElementNode && node.Data == "form" && htmlHasAttr(node, "data-recovery-code-confirm")
+	})
+	if confirmForm == nil {
+		t.Fatal("expected recovery confirmation form")
+	}
+	if got := htmlAttr(confirmForm, "action"); got != expectedAction {
+		t.Fatalf("expected recovery confirmation action %q, got %q", expectedAction, got)
+	}
+	if got := htmlAttr(confirmForm, "data-recovery-continue-target"); got != expectedTarget {
+		t.Fatalf("expected recovery confirmation target %q, got %q", expectedTarget, got)
+	}
+	assertRecoveryCodeConfirmControl(t, confirmForm, "data-recovery-code-checkbox", "expected recovery confirmation checkbox")
+	assertRecoveryCodeConfirmControl(t, confirmForm, "data-recovery-code-submit", "expected recovery confirmation submit button")
+}
+
+func assertRecoveryCodeConfirmControl(t *testing.T, confirmForm *html.Node, attr string, missingMessage string) {
+	t.Helper()
+
+	control := htmlFindElement(confirmForm, func(node *html.Node) bool {
+		return node.Type == html.ElementNode && htmlHasAttr(node, attr)
+	})
+	if control == nil {
+		t.Fatal(missingMessage)
+	}
+}
