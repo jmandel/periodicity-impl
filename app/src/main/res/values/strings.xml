@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+  <string name="today">Today</string>
+  <string name="fake_screen_title">We\'re fixing some technical problems today. Sorry.</string>
+  <string name="fake_screen_info">Please come back tomorrow!</string>
+  <string name="app_name">Euki</string>
+  <string name="error_message_title">There was an error</string>
+  <string name="loading">Loading...</string>
+  <string name="save">Save</string>
+  <string name="dimsiss">Dismiss</string>
+  <string name="go_to_daily_log">See tracked info</string>
+  <string name="quiz">Quiz</string>
+  <string name="procedural_abortion_what_will_it_be_like_new_combined">
+        <![CDATA[
+        <b>Suction or vacuum aspiration</b><br/>
+        Suction abortion is one of the most common types of procedural abortions and is generally used until about 14-16 weeks of pregnancy. Before the abortion, pain medication is often used to help with cramping, and a health care provider might use medication to help the cervix open. Local or general anesthesia can also be used to help manage pain. During a suction abortion, a health care provider will use a small suction device or machine to remove the pregnancy from the uterus. These are generally safe and effective abortion procedures that usually take just a few minutes.<br/><br/>
+        <b>Dilation and evacuation (D&amp;E)</b><br/>
+        Dilation and evacuation (D&amp;E) is another kind of procedural abortion that is commonly used at 14 weeks of pregnancy or more. This procedure might require more than one visit to the clinic, and is generally a very safe and effective abortion procedure practiced all over the world. Depending on the number of weeks of the pregnancy, a health care provider might insert dilator sticks one or two days before the procedure to help open the cervix. You may also receive medication or anesthesia to help manage any pain. <br/><br/>
+        If you get general anesthesia, the health care provider may ask you not to eat anything before the procedure. If you have any questions about this, ask them how you can prepare. During the D&amp;E abortion, a health care provider may use medical instruments and a suction device to remove the pregnancy from the uterus. These are generally very safe and effective abortion procedures that usually take between 20-30 minutes.</b><br/>
+        </b><br/>If you have any questions about the abortion procedure, don’t be afraid to ask the health care provider. They are there to answer any questions you have. <br/><br/>Source: Planned Parenthood Federation of America &amp; National Abortion Federation
+        ]]>
+    </string>
+  <string name="Tracked_data_copy">Euki makes it easy to delete your tracked data, which protects your privacy and ensures sensitive health information can’t be used against you.</string>
+  <string name="Set_a_PIN_copy">You can set a PIN as an extra layer of security, but make sure to remember it. We don’t have access to your data, so there’s no way to recover a lost PIN.</string>
+  <string name="Privacy_header">Privacy</string>
+  <string name="Delete_your_data_header">Delete your data</string>
+  <string name="Set_frequent_data_deletion_copy">Select how often you want Euki to automatically delete your tracked data</string>
+  <string name="Set_a_PIN_copy_2">We do not store or collect any of your information. Data you track in the app is not tied to your email address or phone number, and only you have access to it.</string>
+  <string name="More_information_header">More information</string>
+  <string name="Privacy_best_practices_dropdown">Privacy best practices</string>
+  <string name="Privacy_best_practices_header">Privacy best practices</string>
+  <string name="Privacy_best_practices_copy">
+        <![CDATA[
+        When seeking reproductive health care, privacy is important. There is no legal requirement to share information about pregnancy loss with anyone, including health care providers. These best practices can help you understand how to protect your data and health as you search for care.
+        ]]>
+    </string>
+  <string name="Protect_your_private_messages_dropdown">Protect your private messages</string>
+  <string name="Protect_your_private_messages_copy">
+        <![CDATA[
+        When you send texts via SMS, your phone company stores copies of those texts. These can be turned over to law enforcement if the phone company gets a warrant. They can also be used to influence the ads you see online. If other people have access to your phone, they might also demand to see your private messages. To keep your information private from your phone company and others in your life, you can:<br/><br/>
+         &#8226; Use end-to-end encrypted messaging apps like Signal that don’t store your data.<br/>
+         &#8226; Consider using the disappearing messages feature on apps like Signal.<br/>
+         &#8226; Set a password on your phone and a PIN for Euki if you haven’t already.
+        ]]>
+    </string>
+  <string name="Protect_your_internet_search_history_dropdown">Protect your internet search history</string>
+  <string name="Protect_your_internet_search_history_copy">
+        <![CDATA[
+        When you use the internet, your internet service provider can keep records of the websites you visit. (However, thanks to encryption called HTTPS, they can’t see what you do on those websites.) If you share a phone with family members, they may see your messages or browsing history. To protect your internet search history, try these steps:<br/><br/>
+         &#8226; Use a Virtual Private Network (VPN). VPNs route your internet traffic through their services instead of your internet service providers. It’s important to choose a VPN that doesn’t keep track of what you’re doing—this is known as a no-logs VPN. Most no-logs VPNs cost a few dollars a month, but there are two free options: ProtonVPN’s free tier, and Tunnelbear’s limited free tier.<br/>
+         &#8226; Browse in an incognito window or manually clear your browser history. Great options that protect your browsing from unwanted ads and prevent your search data from being saved include Firefox Focus and DuckDuckGo.
+        ]]>
+    </string>
+  <string name="Protect_your_payment_history_dropdown">Protect your payment history</string>
+  <string name="Protect_your_payment_history_copy">
+        <![CDATA[
+        If you’re worried about reproductive health care services showing up on your bank statements or payment history, use these instead of credit cards:<br/><br/>
+         &#8226; Cash<br/>
+         &#8226; Pre-paid gift cards (Visa, Mastercard, etc.)
+        ]]>
+    </string>
+  <string name="Protect_your_location_data_and_ad_tracking_dropdown">Protect your location data and ad tracking</string>
+  <string name="Protect_your_location_data_and_ad_tracking_copy">
+        <![CDATA[
+        Websites, apps, and social media can track your location and target you for ads related to pregnancy or abortion. To protect your privacy and avoid being tracked:<br/><br/>
+         &#8226; Turn off location sharing on your devices<br/>
+         &#8226; Disable your mobile ad ID in your settings<br/>
+         &#8226; Use DuckDuckGo instead of Google to protect your browser activity and personal data<br/>
+         &#8226; Use Firefox Focus instead of your phone’s default browser to block third party trackers
+        ]]>
+    </string>
+  <string name="Resources_dropdown">Resources</string>
+  <string name="Resources_copy">
+        <![CDATA[
+        For more detailed information about protecting your data privacy online, check out these resources:<br/><br/>
+         &#8226; Digital Defense Fund<br/>
+         &#8226; If/When/How’s Repro Legal Helpline at 844-868-2812<br/>
+         &#8226; Electronic Frontier Foundation privacy guidance
+        ]]>
+    </string>
+  <string name="Med_abortion_mife_miso_dropdown">Medication abortion with mifepristone and misoprostol</string>
+  <string name="Med_abortion_miso_dropdown">Medication abortion with misoprostol</string>
+  <string name="counseling_requirements_dropdown">Counseling requirements</string>
+  <string name="counseling_requirements_copy">
+        <![CDATA[
+        Many states require a pregnant person to attend a counseling session and wait for a specific amount of time (usually at least 24 hours) before receiving abortion care.<br/><br/> Though state mandated, counseling requirements are not medically necessary and often include information about abortion that is incorrect or misleading.
+        ]]>
+    </string>
+  <string name="judicial_bypass_dropdown">Judicial bypass/waiver</string>
+  <string name="judicial_bypass_copy">
+        <![CDATA[
+        In some states, people under a certain age (usually 18, but sometimes younger) can\'t get abortion care without involving a parent. For people who cannot or do not want to involve a parent, there is a court process where a judge can give you permission to have an abortion without involving a parent or legal guardian. This is called a judicial bypass/waiver.<br/><br/> If you need support with a judicial bypass, contact the Repro Legal Helpline.
+        ]]>
+    </string>
+  <string name="legal_risk_dropdown">Legal risk</string>
+  <string name="Legal_risk_copy">
+        <![CDATA[
+        Legal risk is an explanation of legal trouble someone might face, such as a criminal investigation or arrest. It does NOT mean someone will get into legal trouble and is just an explanation of what can happen.
+        ]]>
+    </string>
+  <string name="Parental_involvement_laws_dropdown">Parental involvement laws</string>
+  <string name="Parental_involvement_laws_copy">
+        <![CDATA[
+        Some states require a young person to tell and/or get written permission from a parent or legal guardian to get an abortion.<br/><br/> If/When/How can tell you what the parental involvement laws are in your state.
+        ]]>
+    </string>
+  <string name="waiting_periods_dropdown">Waiting periods</string>
+  <string name="waiting_periods_copy">
+        <![CDATA[
+        Many states require a waiting period (typically at least 24 hours) between receiving counseling and having an abortion. These mandatory waiting periods may require a pregnant person to make multiple trips to their provider if the state requires in-person counseling (vs. virtual counseling).<br/><br/>Counseling requirements and waiting periods are state mandated, and there is no medical reason to require them.
+        ]]>
+    </string>
+  <string name="shield_laws_dropdown">Shield laws</string>
+  <string name="shield_laws_copy">
+        <![CDATA[
+        Several states have passed laws generally referred to as “shield laws,” which are intended to protect (or shield) abortion providers, supporters, and seekers within that state from legal actions put forward in other states. Shield laws only impact people when they are in the state with the shield law.<br/><br/> For example, if someone in Texas ends their pregnancy using pills from a shield law provider in New York, only the person in New York (the provider) is protected by the shield law—not the person in Texas.<br/><br/> To break it down: the law where you are physically located is almost always the law that applies to you.
+        ]]>
+    </string>
+  <string name="Ifwhenhow">If/when/how</string>
+  <string name="Digital_Defense_Fund_and_IfWhenHow">Digital Defense Fund and If/When/How</string>
+  <string name="suction_abortion_what_to_expect_content">
+    <![CDATA[
+    <b>Suction or vacuum aspiration</b><br/>
+    Suction abortion is one of the most common types of procedural abortion, and is generally used until about 14-16 weeks of pregnancy.<br/><br/>
+    Before the abortion, pain medication is often used to help with cramping, and a health care provider might use medication to help the cervix open. Local or general anesthesia can also be used to help manage pain.<br/><br/>
+    During a suction abortion, a health care provider will use a small suction device or machine to remove a pregnancy from the uterus. These are generally safe and effective abortion procedures that usually take just a few minutes. <br/><br/>
+    If you have questions about the abortion procedure, don’t be afraid to ask the health care provider. They are there to answer any questions you have.<br/><br/>
+    <b>Dilation and evacuation (D&amp;E)</b><br/>
+    Dilation and Evacuation (D&amp;E) is another kind of procedural abortion that is commonly used at 14 weeks of pregnancy or more. This procedure might require more than one visit to the clinic, and is a generally very safe and effective abortion procedure practiced all over the world.<br/><br/>
+    Depending on the number of weeks of the pregnancy, a health care provider might insert dilator sticks one or two days before the procedure to help open the cervix. You may also receive medication or anesthesia to help manage any pain.<br/><br/>
+    If you get general anesthesia, the health care provider may ask you not to eat anything before the procedure. If you have questions about this, ask them how you can prepare.<br/><br/>
+    During a D&amp;E abortion, a health care provider may use medical instruments and a suction device to remove the pregnancy from the uterus. These are generally very safe and effective abortion procedures that usually take between 20-30 minutes. </b><br/>
+    </b><br/>If you have questions about the abortion procedure, don’t be afraid to ask the medical provider. They are there to answer any questions you have.<br/><br/>
+    ]]>
+</string>
+
+  <string name="suction_abortion_what_to_expect_source">Planned Parenthood Federation of America &amp; National Abortion Federation</string>
+  <string name="mife_miso">Mifepristone and misoprostol</string>
+  <string name="miso">Misoprostol</string>
+  <string name="logged_data_message">To protect your privacy, Euki gives you the option of deleting the data that you log in the calendar. This will help make sure your sensitive information will not be used against you.</string>
+  <string name="pin_text">You can set a PIN to keep Euki private, but please remember it. There\'s no way to recover your PIN.</string>
+</resources>

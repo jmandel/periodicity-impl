@@ -1,0 +1,341 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/main_background"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingBottom="@dimen/dimen_x9_5">
+
+        <TextView
+            style="@style/TextStyle39"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/dimen_x3_5"
+            android:layout_marginTop="@dimen/dimen_x1_100"
+            android:layout_marginBottom="@dimen/dimen_x9_5"
+            android:text="@string/cycle_settings_title" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/euki_main" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/dimen_x12_10">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_marginHorizontal="@dimen/dimen_x3_5"
+                android:layout_marginRight="@dimen/dimen_x2_5"
+                android:layout_toLeftOf="@+id/stch_track_period"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/TextStyle40"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cycle_settings_option_1_title" />
+
+                <TextView
+                    style="@style/TextStyle41"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dimen_x1_5"
+                    android:text="@string/cycle_settings_option_1_text" />
+
+            </LinearLayout>
+
+            <Switch
+                android:id="@+id/stch_track_period"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:layout_marginRight="@dimen/dimen_x3_5" />
+
+        </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/euki_main" />
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/dimen_x1_100">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_marginHorizontal="@dimen/dimen_x3_5"
+                android:layout_marginRight="@dimen/dimen_x2_5"
+                android:layout_toLeftOf="@+id/stch_period_prediction"
+                android:orientation="vertical">
+
+                <TextView
+                    style="@style/TextStyle40"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/cycle_settings_option_2_title" />
+
+                <TextView
+                    style="@style/TextStyle41"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/dimen_x1_5"
+                    android:text="@string/cycle_settings_option_2_text" />
+
+            </LinearLayout>
+
+            <Switch
+                android:id="@+id/stch_period_prediction"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:layout_marginRight="@dimen/dimen_x3_5" />
+
+        </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/euki_main" />
+
+        <LinearLayout
+            android:id="@+id/ll_cycle_ig"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="@dimen/dimen_x3_5"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/TextStyle39"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x7_5"
+                android:text="@string/cycle_ig_title" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x1_5"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="25dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/cycle_ig_mark"
+                    android:src="@drawable/smart_logo_mark" />
+
+                <TextView
+                    style="@style/TextStyle41"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="@dimen/dimen_x1_5"
+                    android:text="@string/cycle_ig_mark"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <TextView
+                style="@style/TextStyle41"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x1_5"
+                android:text="@string/cycle_ig_intro" />
+
+            <Button
+                android:id="@+id/btn_load_cycle_ig_sample"
+                style="@style/PurpleBorderedButton"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:text="@string/cycle_ig_sample_button" />
+
+            <TextView
+                android:id="@+id/tv_cycle_ig_sample_status"
+                style="@style/TextStyle41"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:visibility="gone" />
+
+            <TextView
+                style="@style/TextStyle40"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x6_5"
+                android:text="@string/cycle_ig_range_title" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x1_5"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/et_cycle_ig_start_date"
+                    style="@style/EditText"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:hint="@string/cycle_ig_start_hint"
+                    android:inputType="date" />
+
+                <EditText
+                    android:id="@+id/et_cycle_ig_end_date"
+                    style="@style/EditText"
+                    android:layout_width="0dp"
+                    android:layout_marginLeft="@dimen/dimen_x2_5"
+                    android:layout_weight="1"
+                    android:hint="@string/cycle_ig_end_hint"
+                    android:inputType="date" />
+
+            </LinearLayout>
+
+            <TextView
+                style="@style/TextStyle41"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x1_5"
+                android:text="@string/cycle_ig_range_help" />
+
+            <CheckBox
+                android:id="@+id/cb_cycle_ig_bleeding"
+                style="@style/TextStyle40"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x3_5"
+                android:checked="true"
+                android:enabled="false"
+                android:text="@string/cycle_ig_bleeding_scope" />
+
+            <CheckBox
+                android:id="@+id/cb_cycle_ig_emotions"
+                style="@style/TextStyle40"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/cycle_ig_emotions_scope" />
+
+            <CheckBox
+                android:id="@+id/cb_cycle_ig_body"
+                style="@style/TextStyle40"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/cycle_ig_body_scope" />
+
+            <CheckBox
+                android:id="@+id/cb_cycle_ig_notes"
+                style="@style/TextStyle40"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/cycle_ig_notes_scope" />
+
+            <Button
+                android:id="@+id/btn_preview_cycle_ig"
+                style="@style/PurpleBorderedButton"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:text="@string/cycle_ig_preview_button" />
+
+            <TextView
+                android:id="@+id/tv_cycle_ig_preview"
+                style="@style/TextStyle41"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x3_5"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_share_cycle_ig"
+                style="@style/PurpleButton"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:text="@string/cycle_ig_share_button"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/ll_cycle_ig_active_mark"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageView
+                    android:layout_width="25dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@string/cycle_ig_mark"
+                    android:src="@drawable/smart_logo_mark" />
+
+                <TextView
+                    style="@style/TextStyle41"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="@dimen/dimen_x1_5"
+                    android:text="@string/cycle_ig_mark"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/img_cycle_ig_qr"
+                android:layout_width="@dimen/dimen_x3_100"
+                android:layout_height="@dimen/dimen_x3_100"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:background="@color/white"
+                android:padding="@dimen/dimen_x2_5"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tv_cycle_ig_share_status"
+                style="@style/TextStyle41"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/dimen_x3_5"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_copy_cycle_ig_link"
+                style="@style/PurpleBorderedButton"
+                android:layout_marginTop="@dimen/dimen_x4_5"
+                android:text="@string/cycle_ig_copy_button"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_native_share_cycle_ig"
+                style="@style/PurpleBorderedButton"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:text="@string/cycle_ig_native_share_button"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_open_cycle_ig_viewer"
+                style="@style/PurpleBorderedButton"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:text="@string/cycle_ig_open_button"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btn_stop_cycle_ig_share"
+                style="@style/PurpleButton"
+                android:layout_marginTop="@dimen/dimen_x2_5"
+                android:text="@string/cycle_ig_stop_button"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>
