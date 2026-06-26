@@ -12,12 +12,39 @@ const branchUrl = (branch) => `${REPO_URL}/tree/${branch}`;
 
 export const HERO = {
   eyebrow: 'Cycle FHIR IG · SMART Link',
-  title: 'One implementation guide, four period trackers, real demos.',
+  title: 'What it takes to implement the Cycle FHIR IG in four open source apps.',
   lede:
-    'The Cycle FHIR Implementation Guide gives menstrual tracking apps a shared, privacy-respecting way to package and share cycle data. We took four very different open source apps — two native Android, one Flutter, one server-rendered web app — and added live SMART Link sharing to each. This page collects the demo videos and, more importantly, the choices and techniques that made each implementation small.',
-  primary: { label: 'Explore the Cycle IG', href: CYCLE_IG_URL },
-  secondary: { label: 'View the repository', href: REPO_URL },
+    'The Cycle FHIR Implementation Guide is a specification that gives menstrual tracking apps a shared, privacy-respecting way to package and share cycle data. This page is a record of adding Cycle IG support to four existing open source apps — two native Android, one Flutter, and one server-rendered web app. It explains what each implementation involved and collects what we learned, so you can do the same in your own app.',
+  // Primary points at the specification (cycle.fhir.me); secondary points at
+  // the implementation code (this GitHub repo). The labels spell out which is
+  // which so the two destinations are never confused.
+  primary: { label: 'Read the Cycle IG spec (cycle.fhir.me)', href: CYCLE_IG_URL },
+  secondary: { label: 'Browse the implementation code (GitHub)', href: REPO_URL },
 };
+
+// First-time visitors confuse the specification, the viewer, and this
+// implementation repository. This section names each one explicitly and links
+// to it, so it is always clear which is which.
+export const ORIENTATION = [
+  {
+    heading: 'The Cycle IG (the specification)',
+    body:
+      'The Cycle FHIR Implementation Guide is the spec that defines how an app packages cycle data into a FHIR Bundle and shares it as an encrypted SMART Link. It is published at cycle.fhir.me and is the thing each app on this page implements.',
+    link: { label: 'Open cycle.fhir.me', href: CYCLE_IG_URL },
+  },
+  {
+    heading: 'The viewer (where a link opens)',
+    body:
+      'When someone opens a shared SMART Link, it lands in the clinician viewer at cycle.fhir.me/view. The viewer fetches the ciphertext and decrypts it locally in the browser to render a clinical review of the shared cycle data.',
+    link: { label: 'Open cycle.fhir.me/view', href: CYCLE_VIEWER_URL },
+  },
+  {
+    heading: 'This repository (the implementations)',
+    body:
+      'This GitHub repository holds the four implementations described below: the code branches, the demo videos, and a writeup for each app. It is the implementation work, not the specification — the two are separate projects.',
+    link: { label: 'Open the periodicity-impl repo', href: REPO_URL },
+  },
+];
 
 // The cross-cutting privacy/sharing technique that every app shares.
 export const PIPELINE = [
@@ -212,7 +239,7 @@ export const REEL = {
   video: 'videos/final/smart-link-implementation-reel.mp4',
   duration: '4:58',
   caption:
-    'The combined reel stitches every app behind one presentation shell, opening on the cycle.fhir.me viewer.',
+    'One reel showing the same sharing flow across all four apps, opening on the cycle.fhir.me viewer.',
 };
 
 export const TIPS = [

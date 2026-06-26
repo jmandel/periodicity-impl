@@ -1,5 +1,6 @@
 import {
   HERO,
+  ORIENTATION,
   PIPELINE,
   CHOICES,
   APPS,
@@ -15,13 +16,14 @@ function Header() {
     <header className="site-header">
       <a className="brand" href="#top">
         <span className="brand-dot" aria-hidden="true" />
-        Cycle&nbsp;IG, Implemented
+        Implementing the Cycle&nbsp;IG
       </a>
       <nav className="nav">
-        <a href="#technique">Technique</a>
+        <a href="#orientation">What&apos;s what</a>
+        <a href="#technique">How it works</a>
         <a href="#choices">Choices</a>
-        <a href="#apps">Apps</a>
-        <a href="#tips">Tips</a>
+        <a href="#apps">The apps</a>
+        <a href="#tips">What we learned</a>
         <a className="nav-cta" href={REPO_URL} target="_blank" rel="noreferrer">
           GitHub ↗
         </a>
@@ -44,24 +46,6 @@ function Hero() {
           {HERO.secondary.label}
         </a>
       </div>
-      <dl className="stat-row">
-        <div>
-          <dt>4 apps</dt>
-          <dd>Android, Flutter &amp; web</dd>
-        </div>
-        <div>
-          <dt>1 snapshot</dt>
-          <dd>preview = payload</dd>
-        </div>
-        <div>
-          <dt>0 plaintext</dt>
-          <dd>uploaded to the host</dd>
-        </div>
-        <div>
-          <dt>Live</dt>
-          <dd>real QR, real decrypt</dd>
-        </div>
-      </dl>
     </section>
   );
 }
@@ -70,7 +54,7 @@ function Reel() {
   return (
     <section className="reel" id="reel">
       <div className="section-head">
-        <h2>The combined reel</h2>
+        <h2>See all four together</h2>
         <span className="badge">{REEL.duration}</span>
       </div>
       <p className="section-sub">{REEL.caption}</p>
@@ -81,15 +65,42 @@ function Reel() {
   );
 }
 
+function Orientation() {
+  return (
+    <section className="orientation" id="orientation">
+      <div className="section-head">
+        <h2>How the pieces fit together</h2>
+      </div>
+      <p className="section-sub">
+        This work involves three separate pieces: the specification the apps implement, the viewer a
+        shared link opens in, and this repository of implementation work. Here is what each one is.
+      </p>
+      <div className="choice-grid">
+        {ORIENTATION.map((item) => (
+          <article className="choice-card" key={item.heading}>
+            <h3>{item.heading}</h3>
+            <p>{item.body}</p>
+            <a className="orient-link" href={item.link.href} target="_blank" rel="noreferrer">
+              {item.link.label} ↗
+            </a>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Technique() {
   return (
     <section className="technique" id="technique">
       <div className="section-head">
-        <h2>The shared technique</h2>
+        <h2>What every implementation does</h2>
       </div>
       <p className="section-sub">
-        Every app implements the same SMART Link pipeline. The data never leaves the device as
-        plaintext, and the clinician viewer decrypts in the browser.
+        Each app implements the same SMART Link pipeline. The mental model is an envelope: the app
+        seals the cycle data so only the recipient can open it, uploads just the sealed envelope to a
+        host, and shares a link. The key that opens the envelope rides in the link&apos;s fragment, so
+        it never reaches the host, and the clinician viewer does the decryption in the browser.
       </p>
       <ol className="pipeline">
         {PIPELINE.map((step, i) => (
@@ -117,11 +128,14 @@ function Choices() {
   return (
     <section className="choices" id="choices">
       <div className="section-head">
-        <h2>Choices that made it small</h2>
+        <h2>Shared implementation choices</h2>
       </div>
       <p className="section-sub">
-        These cross-cutting decisions repeat across every app — and are the reason each
-        implementation stayed a focused, reviewable change.
+        A few decisions recurred across every app and kept each one a focused, reviewable change. The
+        mental model behind them: the share is a list of facts the user actually recorded — a logged
+        day becomes a fact, an untouched day stays silent, and nothing is ever inferred. The IG layers
+        those facts, with the core menstrual-bleeding yes/no underneath and richer detail like flow,
+        temperature, and symptoms on top.
       </p>
       <div className="choice-grid">
         {CHOICES.map((c) => (
@@ -196,7 +210,7 @@ function Apps() {
   return (
     <section className="apps" id="apps">
       <div className="section-head">
-        <h2>The implementations</h2>
+        <h2>Four first forays</h2>
       </div>
       <p className="section-sub">
         Each demo starts with preloaded sample data shown in the app&apos;s normal views, then walks
@@ -215,8 +229,12 @@ function Tips() {
   return (
     <section className="tips" id="tips">
       <div className="section-head">
-        <h2>Tips for your own implementation</h2>
+        <h2>What we learned</h2>
       </div>
+      <p className="section-sub">
+        These are the habits that kept each implementation small and safe. They carry over to any app
+        adding Cycle IG support.
+      </p>
       <ul className="tip-list">
         {TIPS.map((tip, i) => (
           <li key={tip}>
@@ -233,8 +251,12 @@ function Footer() {
   return (
     <footer className="site-footer">
       <p>
-        Built to show how easily the Cycle FHIR IG can be implemented. Source, branches, and writeups
-        live in the{' '}
+        This site documents how the Cycle FHIR IG — the sharing specification at{' '}
+        <a href={CYCLE_IG_URL} target="_blank" rel="noreferrer">
+          cycle.fhir.me
+        </a>{' '}
+        — was added to four open source period trackers. The implementation code, branches, and
+        writeups live in the{' '}
         <a href={REPO_URL} target="_blank" rel="noreferrer">
           periodicity-impl
         </a>{' '}
@@ -242,13 +264,13 @@ function Footer() {
       </p>
       <div className="footer-links">
         <a href={CYCLE_IG_URL} target="_blank" rel="noreferrer">
-          cycle.fhir.me
+          Cycle IG spec (cycle.fhir.me)
         </a>
         <a href={CYCLE_VIEWER_URL} target="_blank" rel="noreferrer">
-          cycle.fhir.me/view
+          Viewer (cycle.fhir.me/view)
         </a>
         <a href={REPO_URL} target="_blank" rel="noreferrer">
-          GitHub repository
+          Implementation code (GitHub)
         </a>
       </div>
     </footer>
@@ -262,10 +284,11 @@ export default function App() {
       <Header />
       <main>
         <Hero />
-        <Reel />
+        <Orientation />
         <Technique />
         <Choices />
         <Apps />
+        <Reel />
         <Tips />
       </main>
       <Footer />
